@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/logo.png" alt="Marsala Quest 8-Bit Logo" width="140" />
+</p>
+
 # 🕹️ MARSALA QUEST 8-BIT — Cronache di Lilibeo
 
 Web app mobile-first in stile **retro gaming 8-bit (NES / Game Boy Color)** dedicata all'esplorazione dal vivo della città di **Marsala (TP)**.

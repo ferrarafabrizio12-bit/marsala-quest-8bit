@@ -1,0 +1,17 @@
+{
+  "name": "Marsala Quest 8-Bit",
+  "short_name": "Marsala 8-Bit",
+  "description": "Esplora Marsala col vero GPS, scatta foto-card 8-bit e sblocca la mappa di Lilibeo.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0e1a",
+  "theme_color": "#0b0e1a",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

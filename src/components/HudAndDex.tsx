@@ -42,23 +42,25 @@ export const HudBar: React.FC<HudBarProps> = ({
         <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={onTitleTap}
-            className="text-left focus:outline-none truncate"
+            className="flex items-center gap-2 text-left focus:outline-none min-w-0"
           >
-            <span className="font-pixel text-[9px] sm:text-[11px] text-[#ffd166] block truncate">
-              MARSALA 8-BIT
-            </span>
-            <span className="text-lg sm:text-xl text-[#4cc9f0] leading-none block truncate">
-              👾 {user.nickname} •{" "}
-              <strong className="text-[#38e54d]">{totalXp} XP</strong>
-            </span>
+            <img
+              src="/logo.png"
+              alt="Logo"
+              className="w-9 h-9 border-2 border-[#ffd166] shrink-0"
+              style={{ imageRendering: "pixelated" }}
+            />
+            <div className="min-w-0">
+              <span className="font-pixel text-[9px] sm:text-[11px] text-[#ffd166] block truncate">
+                MARSALA 8-BIT
+              </span>
+              <span className="text-lg sm:text-xl text-[#4cc9f0] leading-none block truncate">
+                👾 {user.nickname} •{" "}
+                <strong className="text-[#38e54d]">{totalXp} XP</strong>
+              </span>
+            </div>
           </button>
-          <button
-            onClick={onSkyTap}
-            className="w-8 h-8 flex items-center justify-center bg-[#26335c] border-2 border-black text-base shrink-0"
-            title="Cielo di Marsala"
-          >
-            🌅
-          </button>
+          ...
         </div>
 
         <button
