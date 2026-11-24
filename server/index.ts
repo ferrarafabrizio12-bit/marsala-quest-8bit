@@ -48,10 +48,11 @@ app.use(
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       const normalized = origin.replace(/\/+$/, "");
-      if (
-        allowedOrigins.includes(normalized) ||
-        (!IS_PROD && isLocalNetworkOrigin(normalized))
-      ) {
+      const isAllowed = allowedOrigins.includes(normalized);
+      const isLocal = !IS_PROD && isLocalNetworkOrigin(normalized);
+      const isVercel = normalized.endsWith(".vercel.app");
+
+      if (isAllowed || isLocal || isVercel) {
         return callback(null, true);
       }
       return callback(new Error(`Origine non consentita da CORS: ${origin}`));

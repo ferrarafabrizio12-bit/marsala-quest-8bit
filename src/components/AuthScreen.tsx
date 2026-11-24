@@ -50,7 +50,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
           <div className="inline-block bg-[#ff4d6d] border-2 border-black px-3 py-1 font-pixel text-[8px] text-white mb-3 shadow-[3px_3px_0_#000]">
             ★ CARTRIDGE EDITION • 397 A.C. ★
           </div>
-          ...
           <h1 className="font-pixel text-lg sm:text-xl text-[#ffd166] drop-shadow-[3px_3px_0_#000] leading-relaxed">
             MARSALA QUEST
             <span className="block text-[#38e54d] text-xs mt-2">
