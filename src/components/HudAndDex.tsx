@@ -45,7 +45,7 @@ export const HudBar: React.FC<HudBarProps> = ({
             className="flex items-center gap-2 text-left focus:outline-none min-w-0"
           >
             <img
-              src="/logo.png"
+              src="/Marsala-Quest-8bit-ico.png"
               alt="Logo"
               className="w-9 h-9 border-2 border-[#ffd166] shrink-0"
               style={{ imageRendering: "pixelated" }}

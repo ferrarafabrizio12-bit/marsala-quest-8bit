@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface RealGpsState {
   lat: number | null;
@@ -11,7 +11,7 @@ export interface RealGpsState {
 }
 
 export function useRealGps(enabled: boolean): RealGpsState {
-  const [attempt, setAttempt] = useState(0);
+  const watchIdRef = useRef<number | null>(null);
   const [state, setState] = useState<Omit<RealGpsState, "retry">>({
     lat: null,
     lng: null,
@@ -21,13 +21,42 @@ export function useRealGps(enabled: boolean): RealGpsState {
     lastUpdate: null,
   });
 
-  const retry = useCallback(() => {
-    setAttempt((n) => n + 1);
+  const clearWatch = useCallback(() => {
+    if (watchIdRef.current !== null && "geolocation" in navigator) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
   }, []);
 
-  useEffect(() => {
-    if (!enabled) return;
+  const handleSuccess = useCallback((position: GeolocationPosition) => {
+    setState({
+      lat: position.coords.latitude,
+      lng: position.coords.longitude,
+      accuracy: Math.round(position.coords.accuracy),
+      status: "LOCKED",
+      errorMessage: null,
+      lastUpdate: Date.now(),
+    });
+  }, []);
 
+  const handleError = useCallback((err: GeolocationPositionError) => {
+    const detail = err.message ? ` (${err.message})` : "";
+    if (err.code === err.PERMISSION_DENIED) {
+      setState((prev) => ({
+        ...prev,
+        status: "DENIED",
+        errorMessage: `GPS negato [code ${err.code}]${detail}. Tocca RIPROVA.`,
+      }));
+    } else {
+      setState((prev) => ({
+        ...prev,
+        status: "ERROR",
+        errorMessage: `GPS non agganciato [code ${err.code}]${detail}. Tocca RIPROVA.`,
+      }));
+    }
+  }, []);
+
+  const startTracking = useCallback(() => {
     if (!("geolocation" in navigator)) {
       setState((prev) => ({
         ...prev,
@@ -41,53 +70,67 @@ export function useRealGps(enabled: boolean): RealGpsState {
       setState((prev) => ({
         ...prev,
         status: "ERROR",
-        errorMessage:
-          "GPS bloccato in HTTP: apri l’app dal link HTTPS di Vercel.",
+        errorMessage: "GPS bloccato in HTTP: apri il link HTTPS di Vercel.",
       }));
       return;
     }
 
+    clearWatch();
     setState((prev) => ({ ...prev, status: "SEARCHING", errorMessage: null }));
 
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        setState({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: Math.round(position.coords.accuracy),
-          status: "LOCKED",
-          errorMessage: null,
-          lastUpdate: Date.now(),
-        });
+    const highOpts: PositionOptions = {
+      enableHighAccuracy: true,
+      maximumAge: 5000,
+      timeout: 15000,
+    };
+
+    const lowOpts: PositionOptions = {
+      enableHighAccuracy: false,
+      maximumAge: 10000,
+      timeout: 20000,
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        handleSuccess(pos);
+        clearWatch();
+        watchIdRef.current = navigator.geolocation.watchPosition(
+          handleSuccess,
+          handleError,
+          highOpts,
+        );
       },
       (err) => {
-        if (err.code === err.PERMISSION_DENIED) {
-          setState((prev) => ({
-            ...prev,
-            status: "DENIED",
-            errorMessage:
-              "Permesso posizione negato. Attivalo su Impostazioni > Safari/Chrome > Posizione e premi RIPROVA.",
-          }));
-        } else {
-          setState((prev) => ({
-            ...prev,
-            status: "ERROR",
-            errorMessage:
-              "Segnale GPS debole. Spostati all’aperto e premi RIPROVA.",
-          }));
+        if (err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              handleSuccess(pos);
+              clearWatch();
+              watchIdRef.current = navigator.geolocation.watchPosition(
+                handleSuccess,
+                handleError,
+                lowOpts,
+              );
+            },
+            handleError,
+            lowOpts,
+          );
+          return;
         }
+        handleError(err);
       },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 3000,
-        timeout: 15000,
-      },
+      highOpts,
     );
+  }, [clearWatch, handleError, handleSuccess]);
 
-    return () => {
-      navigator.geolocation.clearWatch(watchId);
-    };
-  }, [enabled, attempt]);
+  useEffect(() => {
+    if (!enabled) {
+      clearWatch();
+      return;
+    }
+    startTracking();
+    return clearWatch;
+  }, [enabled, startTracking, clearWatch]);
 
-  return { ...state, retry };
+  return { ...state, retry: startTracking };
 }
