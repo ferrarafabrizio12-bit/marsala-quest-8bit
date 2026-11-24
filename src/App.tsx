@@ -15,7 +15,13 @@ import { CameraCardModal } from './components/CameraCardModal';
 import { LilibeoMedalModal } from './components/LilibeoMedalModal';
 import { AvatarWardrobeModal } from './components/AvatarWardrobeModal';
 import { BottomDock, DexModal, HudBar, LeaderboardModal } from './components/HudAndDex';
-import type { LeaderboardEntry, RetroTheme, UnlockData, UserProfile } from './types/game';
+import type {
+  DailyBountyInfo,
+  LeaderboardEntry,
+  RetroTheme,
+  UnlockData,
+  UserProfile,
+} from './types/game';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -23,6 +29,7 @@ export default function App() {
   const [slowBoot, setSlowBoot] = useState(false);
   const [unlocks, setUnlocks] = useState<Record<string, UnlockData>>({});
   const [easterEggs, setEasterEggs] = useState<string[]>([]);
+  const [dailyBounty, setDailyBounty] = useState<DailyBountyInfo | null>(null);
   const [totalXp, setTotalXp] = useState(0);
 
   const [selectedPoi, setSelectedPoi] = useState<PoiDefinition | null>(null);
@@ -32,6 +39,8 @@ export default function App() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [showMedal, setShowMedal] = useState(false);
+  const [showPrestigeConfirm, setShowPrestigeConfirm] = useState(false);
+  const [activatingPrestige, setActivatingPrestige] = useState(false);
 
   const [theme, setTheme] = useState<RetroTheme>('default');
   const [crtEnabled, setCrtEnabled] = useState(true);
@@ -55,7 +64,7 @@ export default function App() {
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast((prev) => (prev === msg ? null : prev)), 4500);
+    setTimeout(() => setToast((prev) => (prev === msg ? null : prev)), 4800);
   }, []);
 
   const loadProgress = useCallback(async () => {
@@ -65,6 +74,7 @@ export default function App() {
       setUser(data.user);
       setUnlocks(data.unlocks);
       setEasterEggs(data.easterEggs);
+      setDailyBounty(data.dailyBounty);
       setTotalXp(data.totalXp);
     } catch {
       setStoredToken(null);
@@ -213,6 +223,27 @@ export default function App() {
     showToast('👕 Nuovo look salvato su mappa e classifica!');
   };
 
+  const handleConfirmPrestige = async () => {
+    setActivatingPrestige(true);
+    try {
+      const res = await api.activatePrestige();
+      setUser(res.user);
+      setUnlocks(res.unlocks);
+      setEasterEggs(res.easterEggs);
+      setDailyBounty(res.dailyBounty);
+      setTotalXp(res.totalXp);
+      setShowPrestigeConfirm(false);
+      sound8bit.victoryMedal();
+      showToast(
+        `⚡ PRESTIGIO ★${res.user.prestige} ATTIVATO! Card Olografiche & nuovi capi in LOOK!`
+      );
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Errore attivazione Prestigio.');
+    } finally {
+      setActivatingPrestige(false);
+    }
+  };
+
   const handleUnlockSubmit = async (photoDataUrl: string) => {
     if (!selectedPoi || gps.lat === null || gps.lng === null) return;
     const prevCount = Object.keys(unlocks).length;
@@ -226,8 +257,10 @@ export default function App() {
 
     const nextUnlocks = { ...unlocks, [selectedPoi.id]: res.unlock };
     const nextCount = Object.keys(nextUnlocks).length;
+    setUser(res.user);
     setUnlocks(nextUnlocks);
     setEasterEggs(res.easterEggs);
+    setDailyBounty(res.dailyBounty);
     setTotalXp(res.totalXp);
     setSelectedPoi(null);
 
@@ -235,17 +268,26 @@ export default function App() {
     setJustSyncedPoiId(selectedPoi.id);
 
     const cardCosmetic =
-      nextCount > prevCount
+      nextCount > prevCount && res.user.prestige === 0
         ? COSMETICS_CATALOG.find(
             (c) => c.requirement.type === 'cards' && c.requirement.count === nextCount
           )
         : undefined;
 
-    showToast(
-      cardCosmetic
-        ? `★ ZONA COLORATA: ${selectedPoi.name} • 👕 Sbloccato: ${cardCosmetic.name}!`
-        : `★ ZONA COLORATA: ${selectedPoi.name} (+${selectedPoi.xp} XP)`
-    );
+    if (res.bountyClaimedNow) {
+      showToast(
+        `🎯 OBIETTIVO DEL GIORNO COMPLETATO (+${res.bountyXpAwarded} XP • Streak 🔥${res.user.bountyStreak}d)!`
+      );
+    } else if (cardCosmetic) {
+      showToast(`★ ZONA COLORATA: ${selectedPoi.name} • 👕 Sbloccato: ${cardCosmetic.name}!`);
+    } else {
+      showToast(
+        res.unlock.isHolo
+          ? `✦ CARD HOLO: ${selectedPoi.name} (+${res.unlock.xpEarned} XP)`
+          : `★ ZONA COLORATA: ${selectedPoi.name} (+${res.unlock.xpEarned} XP)`
+      );
+    }
+
     setTimeout(() => setJustSyncedPoiId(null), 1900);
 
     (res.newlyUnlockedEggs || []).forEach((eggId, idx) => {
@@ -282,6 +324,7 @@ export default function App() {
     setUser(null);
     setUnlocks({});
     setEasterEggs([]);
+    setDailyBounty(null);
     setTotalXp(0);
     setTheme('default');
   };
@@ -325,16 +368,19 @@ export default function App() {
         user={user}
         unlockedCount={unlockedCount}
         totalXp={totalXp}
+        dailyBounty={dailyBounty}
         gps={gps}
         onTitleTap={handleTitleTap}
         onSkyTap={handleSkyTap}
         onRadarTap={handleRadarTap}
         onProgressTap={handleProgressTap}
+        onSelectBountyPoi={setSelectedPoi}
       />
 
       <MarsalaFogMap
         gps={gps}
         avatar={user.avatar}
+        dailyBountyPoiId={dailyBounty?.poiId || ''}
         unlocks={unlocks}
         justSyncedPoiId={justSyncedPoiId}
         onSelectPoi={setSelectedPoi}
@@ -343,6 +389,7 @@ export default function App() {
 
       <BottomDock
         unlockedCount={unlockedCount}
+        prestige={user.prestige}
         isCompleted={isCompleted}
         crtEnabled={crtEnabled}
         muted={muted}
@@ -350,6 +397,7 @@ export default function App() {
         onOpenWardrobe={() => setShowWardrobe(true)}
         onOpenLeaderboard={() => void handleOpenLeaderboard()}
         onOpenMedal={() => setShowMedal(true)}
+        onOpenPrestigeConfirm={() => setShowPrestigeConfirm(true)}
         onToggleCrt={handleToggleCrt}
         onToggleMute={handleToggleMute}
         onLogout={handleLogout}
@@ -416,10 +464,51 @@ export default function App() {
         </div>
       )}
 
+      {/* Modale Conferma New Game+ (Prestigio) */}
+      {showPrestigeConfirm && (
+        <div className="fixed inset-0 z-[1150] bg-black/85 flex items-center justify-center p-4">
+          <div className="nes-box-gold holo-card max-w-md p-5 text-center">
+            <p className="text-5xl mb-2">⚡</p>
+            <h3 className="font-pixel text-xs text-[#f0abfc] mb-3">
+              NEW GAME+ • PRESTIGIO ★{user.prestige + 1}
+            </h3>
+            <p className="text-xl text-[#f4f1de] mb-4 leading-snug">
+              Hai illuminato tutta Marsala! Attivando il Prestigio:
+              <br />• Conservi tutti gli <strong>XP</strong>, i <strong>vestiti</strong> e gli{' '}
+              <strong>Easter Egg</strong>.
+              <br />• La mappa torna grigia per una nuova sfida con <strong>raggio GPS stretto</strong>,{' '}
+              <strong>+25% XP</strong> e <strong>Card Olografiche ✦</strong>!
+            </p>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                disabled={activatingPrestige}
+                onClick={() => setShowPrestigeConfirm(false)}
+                className="nes-btn py-2.5 bg-[#26335c] text-white text-[9px]"
+              >
+                ANNULLA
+              </button>
+              <button
+                type="button"
+                disabled={activatingPrestige}
+                onClick={() => void handleConfirmPrestige()}
+                className="nes-btn py-2.5 bg-[#c026d3] text-white text-[9px]"
+              >
+                {activatingPrestige ? 'ATTIVAZIONE...' : '★ AVVIA PRESTIGIO'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedPoi && (
         <CameraCardModal
           poi={selectedPoi}
           nickname={user.nickname}
+          prestige={user.prestige}
+          isDailyBounty={dailyBounty?.poiId === selectedPoi.id}
+          bountyCompletedToday={Boolean(dailyBounty?.completedToday)}
+          bountyBonusXp={dailyBounty?.bonusXp || 100}
           gps={gps}
           existingUnlock={unlocks[selectedPoi.id]}
           onClose={() => setSelectedPoi(null)}
@@ -433,6 +522,7 @@ export default function App() {
           nickname={user.nickname}
           unlockedCardsCount={unlockedCount}
           easterEggs={easterEggs}
+          prestige={user.prestige}
           onSave={handleSaveAvatar}
           onClose={() => setShowWardrobe(false)}
         />
@@ -442,6 +532,8 @@ export default function App() {
         <DexModal
           unlocks={unlocks}
           easterEggs={easterEggs}
+          dailyBounty={dailyBounty}
+          bountyStreak={user.bountyStreak}
           onSelectPoi={setSelectedPoi}
           onTrigger1860={handleTrigger1860}
           onTriggerPunic={handleTriggerPunic}

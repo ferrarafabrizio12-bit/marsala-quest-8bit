@@ -172,3 +172,47 @@ body {
 .punic-sail {
   animation: sailReverse 6.5s linear forwards;
 }
+
+/* Card Olografica (Modalità Prestigio) */
+@keyframes holoBorderShift {
+  0% {
+    border-color: #ffd166;
+    box-shadow: 0 0 10px rgba(255, 209, 102, 0.55), 4px 4px 0 #000;
+  }
+  33% {
+    border-color: #4cc9f0;
+    box-shadow: 0 0 12px rgba(76, 201, 240, 0.65), 4px 4px 0 #000;
+  }
+  66% {
+    border-color: #e879f9;
+    box-shadow: 0 0 12px rgba(232, 121, 249, 0.65), 4px 4px 0 #000;
+  }
+  100% {
+    border-color: #ffd166;
+    box-shadow: 0 0 10px rgba(255, 209, 102, 0.55), 4px 4px 0 #000;
+  }
+}
+
+.holo-card {
+  animation: holoBorderShift 3.2s linear infinite;
+  background-image: linear-gradient(
+    135deg,
+    rgba(255, 209, 102, 0.12) 0%,
+    rgba(76, 201, 240, 0.14) 50%,
+    rgba(232, 121, 249, 0.14) 100%
+  );
+}
+
+/* Pulsazione Obiettivo del Giorno sulla mappa */
+@keyframes bountyPulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.13);
+  }
+}
+
+.bounty-pulse {
+  animation: bountyPulse 1.4s ease-in-out infinite;
+}

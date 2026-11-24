@@ -5,6 +5,9 @@ export interface UserProfile {
   username: string;
   nickname: string;
   avatar: AvatarConfig;
+  prestige: number;
+  bountyStreak: number;
+  lastBountyDate: string | null;
 }
 
 export interface UnlockData {
@@ -15,11 +18,21 @@ export interface UnlockData {
   lng: number;
   accuracy: number;
   xpEarned: number;
+  isHolo: boolean;
+}
+
+export interface DailyBountyInfo {
+  poiId: string;
+  date: string;
+  completedToday: boolean;
+  bonusXp: number;
 }
 
 export interface LeaderboardEntry {
   nickname: string;
   avatar: AvatarConfig;
+  prestige: number;
+  bountyStreak: number;
   unlockedCount: number;
   percent: number;
   easterEggCount: number;

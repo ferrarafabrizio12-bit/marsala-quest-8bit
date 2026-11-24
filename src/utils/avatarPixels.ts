@@ -142,6 +142,16 @@ function getTopRects(topId: string): PixelRect[] {
         { x: 7, y: 11, w: 2, h: 1, fill: '#b91c1c' },
         ...hands,
       ];
+      case 'top-prestige-cape':
+    return [
+      { x: 3, y: 9, w: 1, h: 5, fill: '#a21caf' },
+      { x: 12, y: 9, w: 1, h: 5, fill: '#a21caf' },
+      { x: 4, y: 9, w: 8, h: 5, fill: '#c026d3' },
+      { x: 3, y: 9, w: 2, h: 1, fill: '#ffd166' },
+      { x: 11, y: 9, w: 2, h: 1, fill: '#ffd166' },
+      { x: 7, y: 9, w: 2, h: 5, fill: '#fef08a' },
+      ...hands,
+    ];
     case 'top-explorer':
     default:
       return [
@@ -185,6 +195,13 @@ function getGlassesRects(glassesId: string): PixelRect[] {
         { x: 9, y: 6, w: 2, h: 1, fill: '#f43f5e' },
         { x: 7, y: 6, w: 2, h: 1, fill: '#a855f7' },
       ];
+      case 'glasses-holo':
+    return [
+      { x: 4, y: 5, w: 8, h: 3, fill: '#f0abfc' },
+      { x: 5, y: 6, w: 2, h: 1, fill: '#38bdf8' },
+      { x: 7, y: 6, w: 2, h: 1, fill: '#fef08a' },
+      { x: 9, y: 6, w: 2, h: 1, fill: '#f43f5e' },
+    ];
     case 'glasses-none':
     default:
       return [];

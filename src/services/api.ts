@@ -1,5 +1,5 @@
 import type { AvatarConfig, AvatarGender } from '../../shared/cosmetics';
-import type { LeaderboardEntry, UnlockData, UserProfile } from '../types/game';
+import type { DailyBountyInfo, LeaderboardEntry, UnlockData, UserProfile } from '../types/game';
 
 const TOKEN_KEY = 'marsala_quest_jwt';
 const API_BASE = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
@@ -64,8 +64,20 @@ export const api = {
       user: UserProfile;
       unlocks: Record<string, UnlockData>;
       easterEggs: string[];
+      dailyBounty: DailyBountyInfo;
       totalXp: number;
     }>('/progress'),
+
+  activatePrestige: () =>
+    request<{
+      user: UserProfile;
+      unlocks: Record<string, UnlockData>;
+      easterEggs: string[];
+      dailyBounty: DailyBountyInfo;
+      totalXp: number;
+    }>('/progress/prestige', {
+      method: 'POST',
+    }),
 
   unlockPoi: (payload: {
     poiId: string;
@@ -76,8 +88,12 @@ export const api = {
   }) =>
     request<{
       unlock: UnlockData;
+      user: UserProfile;
       easterEggs: string[];
       newlyUnlockedEggs: string[];
+      bountyClaimedNow: boolean;
+      bountyXpAwarded: number;
+      dailyBounty: DailyBountyInfo;
       totalXp: number;
     }>('/progress/unlock', {
       method: 'POST',

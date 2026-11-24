@@ -12,6 +12,10 @@ export interface UserRecord {
   nickname: string;
   passwordHash: string;
   avatar: AvatarConfig;
+  prestige: number;
+  bonusXp: number;
+  bountyStreak: number;
+  lastBountyDate: string | null;
   createdAt: string;
 }
 
@@ -23,12 +27,16 @@ export interface UnlockRecord {
   lng: number;
   accuracy: number;
   xpEarned: number;
+  isHolo: boolean;
 }
 
 export interface LeaderboardRow {
   userId: string;
   nickname: string;
   avatar: AvatarConfig;
+  prestige: number;
+  bonusXp: number;
+  bountyStreak: number;
   unlockedCount: number;
   poiXp: number;
   easterEggs: string[];
@@ -51,6 +59,21 @@ export const pool = new Pool({
 
 const DEFAULT_AVATAR_JSON = JSON.stringify(DEFAULT_AVATAR);
 
+function mapUserRow(r: Record<string, unknown>): UserRecord {
+  return {
+    id: String(r.id),
+    username: String(r.username),
+    nickname: String(r.nickname),
+    passwordHash: String(r.password_hash),
+    avatar: sanitizeAvatarConfig(r.avatar_config),
+    prestige: Number(r.prestige || 0),
+    bonusXp: Number(r.bonus_xp || 0),
+    bountyStreak: Number(r.bounty_streak || 0),
+    lastBountyDate: r.last_bounty_date ? String(r.last_bounty_date) : null,
+    createdAt: new Date(String(r.created_at)).toISOString(),
+  };
+}
+
 export async function initDb(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -59,11 +82,19 @@ export async function initDb(): Promise<void> {
       nickname TEXT NOT NULL,
       password_hash TEXT NOT NULL,
       avatar_config JSONB NOT NULL DEFAULT '${DEFAULT_AVATAR_JSON}'::jsonb,
+      prestige INTEGER NOT NULL DEFAULT 0,
+      bonus_xp INTEGER NOT NULL DEFAULT 0,
+      bounty_streak INTEGER NOT NULL DEFAULT 0,
+      last_bounty_date TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS avatar_config JSONB NOT NULL DEFAULT '${DEFAULT_AVATAR_JSON}'::jsonb;
+      ADD COLUMN IF NOT EXISTS avatar_config JSONB NOT NULL DEFAULT '${DEFAULT_AVATAR_JSON}'::jsonb,
+      ADD COLUMN IF NOT EXISTS prestige INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS bonus_xp INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS bounty_streak INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS last_bounty_date TEXT;
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_nickname_lower
       ON users (LOWER(nickname));
@@ -76,9 +107,13 @@ export async function initDb(): Promise<void> {
       lng DOUBLE PRECISION NOT NULL,
       accuracy INTEGER NOT NULL DEFAULT 0,
       xp_earned INTEGER NOT NULL,
+      is_holo BOOLEAN NOT NULL DEFAULT FALSE,
       unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (user_id, poi_id)
     );
+
+    ALTER TABLE unlocks
+      ADD COLUMN IF NOT EXISTS is_holo BOOLEAN NOT NULL DEFAULT FALSE;
 
     CREATE TABLE IF NOT EXISTS easter_eggs (
       user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -91,38 +126,20 @@ export async function initDb(): Promise<void> {
 
 export async function findUserByUsername(username: string): Promise<UserRecord | null> {
   const { rows } = await pool.query(
-    `SELECT id, username, nickname, password_hash, avatar_config, created_at
+    `SELECT id, username, nickname, password_hash, avatar_config, prestige, bonus_xp, bounty_streak, last_bounty_date, created_at
      FROM users WHERE username = $1`,
     [username]
   );
-  if (!rows[0]) return null;
-  const r = rows[0];
-  return {
-    id: r.id,
-    username: r.username,
-    nickname: r.nickname,
-    passwordHash: r.password_hash,
-    avatar: sanitizeAvatarConfig(r.avatar_config),
-    createdAt: new Date(r.created_at).toISOString(),
-  };
+  return rows[0] ? mapUserRow(rows[0]) : null;
 }
 
 export async function findUserById(id: string): Promise<UserRecord | null> {
   const { rows } = await pool.query(
-    `SELECT id, username, nickname, password_hash, avatar_config, created_at
+    `SELECT id, username, nickname, password_hash, avatar_config, prestige, bonus_xp, bounty_streak, last_bounty_date, created_at
      FROM users WHERE id = $1`,
     [id]
   );
-  if (!rows[0]) return null;
-  const r = rows[0];
-  return {
-    id: r.id,
-    username: r.username,
-    nickname: r.nickname,
-    passwordHash: r.password_hash,
-    avatar: sanitizeAvatarConfig(r.avatar_config),
-    createdAt: new Date(r.created_at).toISOString(),
-  };
+  return rows[0] ? mapUserRow(rows[0]) : null;
 }
 
 export async function isNicknameTaken(nickname: string, excludeUserId?: string): Promise<boolean> {
@@ -145,18 +162,10 @@ export async function createUser(user: {
   const { rows } = await pool.query(
     `INSERT INTO users (id, username, nickname, password_hash, avatar_config)
      VALUES ($1, $2, $3, $4, $5::jsonb)
-     RETURNING id, username, nickname, password_hash, avatar_config, created_at`,
+     RETURNING id, username, nickname, password_hash, avatar_config, prestige, bonus_xp, bounty_streak, last_bounty_date, created_at`,
     [user.id, user.username, user.nickname, user.passwordHash, JSON.stringify(user.avatar)]
   );
-  const r = rows[0];
-  return {
-    id: r.id,
-    username: r.username,
-    nickname: r.nickname,
-    passwordHash: r.password_hash,
-    avatar: sanitizeAvatarConfig(r.avatar_config),
-    createdAt: new Date(r.created_at).toISOString(),
-  };
+  return mapUserRow(rows[0]);
 }
 
 export async function updateUserNickname(userId: string, nickname: string): Promise<void> {
@@ -172,7 +181,7 @@ export async function updateUserAvatar(userId: string, avatar: AvatarConfig): Pr
 
 export async function getUserUnlocks(userId: string): Promise<Record<string, UnlockRecord>> {
   const { rows } = await pool.query(
-    `SELECT poi_id, photo_data_url, lat, lng, accuracy, xp_earned, unlocked_at
+    `SELECT poi_id, photo_data_url, lat, lng, accuracy, xp_earned, is_holo, unlocked_at
      FROM unlocks WHERE user_id = $1`,
     [userId]
   );
@@ -185,6 +194,7 @@ export async function getUserUnlocks(userId: string): Promise<Record<string, Unl
       lng: Number(r.lng),
       accuracy: Number(r.accuracy),
       xpEarned: Number(r.xp_earned),
+      isHolo: Boolean(r.is_holo),
       unlockedAt: new Date(r.unlocked_at).toISOString(),
     };
   }
@@ -204,17 +214,18 @@ export async function upsertUnlock(
   record: Omit<UnlockRecord, 'unlockedAt'>
 ): Promise<UnlockRecord> {
   const { rows } = await pool.query(
-    `INSERT INTO unlocks (user_id, poi_id, photo_data_url, lat, lng, accuracy, xp_earned)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO unlocks (user_id, poi_id, photo_data_url, lat, lng, accuracy, xp_earned, is_holo)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (user_id, poi_id)
      DO UPDATE SET
        photo_data_url = EXCLUDED.photo_data_url,
        lat = EXCLUDED.lat,
        lng = EXCLUDED.lng,
        accuracy = EXCLUDED.accuracy,
-       xp_earned = EXCLUDED.xp_earned,
+       xp_earned = GREATEST(unlocks.xp_earned, EXCLUDED.xp_earned),
+       is_holo = unlocks.is_holo OR EXCLUDED.is_holo,
        unlocked_at = NOW()
-     RETURNING poi_id, photo_data_url, lat, lng, accuracy, xp_earned, unlocked_at`,
+     RETURNING poi_id, photo_data_url, lat, lng, accuracy, xp_earned, is_holo, unlocked_at`,
     [
       userId,
       record.poiId,
@@ -223,6 +234,7 @@ export async function upsertUnlock(
       record.lng,
       record.accuracy,
       record.xpEarned,
+      record.isHolo,
     ]
   );
   const r = rows[0];
@@ -233,8 +245,85 @@ export async function upsertUnlock(
     lng: Number(r.lng),
     accuracy: Number(r.accuracy),
     xpEarned: Number(r.xp_earned),
+    isHolo: Boolean(r.is_holo),
     unlockedAt: new Date(r.unlocked_at).toISOString(),
   };
+}
+
+export async function claimDailyBountyReward(
+  userId: string,
+  todayStr: string,
+  yesterdayStr: string
+): Promise<{
+  claimedNow: boolean;
+  bountyXpAwarded: number;
+  bountyStreak: number;
+  bonusXp: number;
+}> {
+  const user = await findUserById(userId);
+  if (!user) throw new Error('Utente non trovato.');
+
+  if (user.lastBountyDate === todayStr) {
+    return {
+      claimedNow: false,
+      bountyXpAwarded: 0,
+      bountyStreak: user.bountyStreak,
+      bonusXp: user.bonusXp,
+    };
+  }
+
+  const nextStreak = user.lastBountyDate === yesterdayStr ? user.bountyStreak + 1 : 1;
+  const bountyXpAwarded = nextStreak >= 3 ? 150 : 100;
+
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET bonus_xp = bonus_xp + $1,
+         bounty_streak = $2,
+         last_bounty_date = $3
+     WHERE id = $4
+     RETURNING bonus_xp, bounty_streak`,
+    [bountyXpAwarded, nextStreak, todayStr, userId]
+  );
+
+  return {
+    claimedNow: true,
+    bountyXpAwarded,
+    bountyStreak: Number(rows[0].bounty_streak),
+    bonusXp: Number(rows[0].bonus_xp),
+  };
+}
+
+export async function activateUserPrestige(userId: string): Promise<UserRecord> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const sumRes = await client.query(
+      `SELECT COALESCE(SUM(xp_earned), 0)::int AS current_poi_xp
+       FROM unlocks WHERE user_id = $1`,
+      [userId]
+    );
+    const bankedXp = Number(sumRes.rows[0]?.current_poi_xp || 0);
+
+    await client.query(`DELETE FROM unlocks WHERE user_id = $1`, [userId]);
+
+    const userRes = await client.query(
+      `UPDATE users
+       SET prestige = prestige + 1,
+           bonus_xp = bonus_xp + $1
+       WHERE id = $2
+       RETURNING id, username, nickname, password_hash, avatar_config, prestige, bonus_xp, bounty_streak, last_bounty_date, created_at`,
+      [bankedXp, userId]
+    );
+
+    await client.query('COMMIT');
+    return mapUserRow(userRes.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function addEasterEgg(userId: string, eggId: string): Promise<boolean> {
@@ -249,12 +338,12 @@ export async function addEasterEgg(userId: string, eggId: string): Promise<boole
 export async function getLeaderboardRows(): Promise<LeaderboardRow[]> {
   const [usersRes, eggsRes] = await Promise.all([
     pool.query(`
-      SELECT u.id AS user_id, u.nickname, u.avatar_config,
+      SELECT u.id AS user_id, u.nickname, u.avatar_config, u.prestige, u.bonus_xp, u.bounty_streak,
         COUNT(un.poi_id)::int AS unlocked_count,
         COALESCE(SUM(un.xp_earned), 0)::int AS poi_xp
       FROM users u
       LEFT JOIN unlocks un ON un.user_id = u.id
-      GROUP BY u.id, u.nickname, u.avatar_config
+      GROUP BY u.id, u.nickname, u.avatar_config, u.prestige, u.bonus_xp, u.bounty_streak
     `),
     pool.query(`SELECT user_id, egg_id FROM easter_eggs`),
   ]);
@@ -270,6 +359,9 @@ export async function getLeaderboardRows(): Promise<LeaderboardRow[]> {
     userId: r.user_id,
     nickname: r.nickname,
     avatar: sanitizeAvatarConfig(r.avatar_config),
+    prestige: Number(r.prestige || 0),
+    bonusXp: Number(r.bonus_xp || 0),
+    bountyStreak: Number(r.bounty_streak || 0),
     unlockedCount: Number(r.unlocked_count),
     poiXp: Number(r.poi_xp),
     easterEggs: eggsByUser.get(r.user_id) || [],

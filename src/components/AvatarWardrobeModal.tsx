@@ -14,6 +14,7 @@ interface AvatarWardrobeModalProps {
   nickname: string;
   unlockedCardsCount: number;
   easterEggs: string[];
+  prestige: number;
   onSave: (next: AvatarConfig) => Promise<void>;
   onClose: () => void;
 }
@@ -30,6 +31,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
   nickname,
   unlockedCardsCount,
   easterEggs,
+  prestige,
   onSave,
   onClose,
 }) => {
@@ -46,9 +48,9 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
   const unlockedTotal = useMemo(
     () =>
       COSMETICS_CATALOG.filter(
-        (i) => i.requirement.type !== 'default' && isCosmeticUnlocked(i, unlockedCardsCount, easterEggs)
+        (i) => i.requirement.type !== 'default' && isCosmeticUnlocked(i, unlockedCardsCount, easterEggs, prestige)
       ).length,
-    [unlockedCardsCount, easterEggs]
+    [unlockedCardsCount, easterEggs, prestige]
   );
 
   const rewardTotal = useMemo(
@@ -165,7 +167,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
         {/* Griglia Indumenti */}
         <div className="flex-1 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2 pr-1">
           {slotItems.map((item) => {
-            const unlocked = isCosmeticUnlocked(item, unlockedCardsCount, easterEggs);
+            const unlocked = isCosmeticUnlocked(item, unlockedCardsCount, easterEggs, prestige);
             const selected = draft[activeSlot] === item.id;
             const previewAvatar: AvatarConfig = { ...draft, [activeSlot]: item.id };
 

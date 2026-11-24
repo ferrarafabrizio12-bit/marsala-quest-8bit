@@ -5,7 +5,9 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import {
+  activateUserPrestige,
   addEasterEgg,
+  claimDailyBountyReward,
   createUser,
   findUserById,
   findUserByUsername,
@@ -17,8 +19,16 @@ import {
   updateUserAvatar,
   updateUserNickname,
   upsertUnlock,
+  type UserRecord,
 } from './db.js';
-import { EASTER_EGGS, MARSALA_POIS, haversineMeters } from '../shared/pois.js';
+import {
+  EASTER_EGGS,
+  MARSALA_POIS,
+  getDailyBountyPoiId,
+  getEffectiveUnlockRadius,
+  getItalyDateString,
+  haversineMeters,
+} from '../shared/pois.js';
 import {
   DEFAULT_AVATAR,
   getUnlockedCosmeticIds,
@@ -97,10 +107,36 @@ function computeEggXp(easterEggs: string[]): number {
 
 function computeTotalXp(
   unlocks: Record<string, { xpEarned: number }>,
-  easterEggs: string[]
+  easterEggs: string[],
+  bonusXp = 0
 ): number {
   const poiXp = Object.values(unlocks).reduce((sum, u) => sum + u.xpEarned, 0);
-  return poiXp + computeEggXp(easterEggs);
+  return bonusXp + poiXp + computeEggXp(easterEggs);
+}
+
+function serializeUser(u: UserRecord) {
+  return {
+    id: u.id,
+    username: u.username,
+    nickname: u.nickname,
+    avatar: u.avatar,
+    prestige: u.prestige,
+    bountyStreak: u.bountyStreak,
+    lastBountyDate: u.lastBountyDate,
+  };
+}
+
+function buildDailyBounty(u: UserRecord) {
+  const today = getItalyDateString();
+  const poiId = getDailyBountyPoiId(today);
+  const completedToday = u.lastBountyDate === today;
+  const nextStreakIfClaimed = completedToday ? u.bountyStreak : u.bountyStreak + 1;
+  return {
+    poiId,
+    date: today,
+    completedToday,
+    bonusXp: nextStreakIfClaimed >= 3 ? 150 : 100,
+  };
 }
 
 app.get('/api/health', (_req: Request, res: Response) => {
@@ -158,12 +194,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '30d' });
     res.status(201).json({
       token,
-      user: {
-        id: user.id,
-        username: user.username,
-        nickname: user.nickname,
-        avatar: user.avatar,
-      },
+      user: serializeUser(user),
     });
   } catch (err) {
     console.error('[REGISTER ERROR]', err);
@@ -185,12 +216,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '30d' });
     res.json({
       token,
-      user: {
-        id: user.id,
-        username: user.username,
-        nickname: user.nickname,
-        avatar: user.avatar,
-      },
+      user: serializeUser(user),
     });
   } catch (err) {
     console.error('[LOGIN ERROR]', err);
@@ -210,15 +236,11 @@ app.get('/api/progress', authMiddleware, async (req: AuthRequest, res: Response)
       getUserEasterEggs(user.id),
     ]);
     res.json({
-      user: {
-        id: user.id,
-        username: user.username,
-        nickname: user.nickname,
-        avatar: user.avatar,
-      },
+      user: serializeUser(user),
       unlocks,
       easterEggs,
-      totalXp: computeTotalXp(unlocks, easterEggs),
+      dailyBounty: buildDailyBounty(user),
+      totalXp: computeTotalXp(unlocks, easterEggs, user.bonusXp),
     });
   } catch (err) {
     console.error('[GET PROGRESS ERROR]', err);
@@ -245,9 +267,14 @@ app.patch('/api/auth/nickname', authMiddleware, async (req: AuthRequest, res: Re
   }
 });
 
-// --- AGGIORNA AVATAR & COSMETICS (con verifica sblocchi lato server) ---
 app.patch('/api/auth/avatar', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    const user = await findUserById(req.userId!);
+    if (!user) {
+      res.status(404).json({ error: 'Utente non trovato.' });
+      return;
+    }
+
     const candidate = sanitizeAvatarConfig(req.body);
     const [unlocks, easterEggs] = await Promise.all([
       getUserUnlocks(req.userId!),
@@ -255,7 +282,7 @@ app.patch('/api/auth/avatar', authMiddleware, async (req: AuthRequest, res: Resp
     ]);
 
     const unlockedSet = new Set(
-      getUnlockedCosmeticIds(Object.keys(unlocks).length, easterEggs)
+      getUnlockedCosmeticIds(Object.keys(unlocks).length, easterEggs, user.prestige)
     );
 
     const chosen = [candidate.hat, candidate.glasses, candidate.top, candidate.bottom];
@@ -274,8 +301,47 @@ app.patch('/api/auth/avatar', authMiddleware, async (req: AuthRequest, res: Resp
   }
 });
 
+// --- ATTIVA MODALITÀ PRESTIGIO (NEW GAME+) ---
+app.post('/api/progress/prestige', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await findUserById(req.userId!);
+    if (!user) {
+      res.status(404).json({ error: 'Utente non trovato.' });
+      return;
+    }
+
+    const unlocks = await getUserUnlocks(user.id);
+    if (Object.keys(unlocks).length < MARSALA_POIS.length) {
+      res.status(403).json({
+        error: `Devi prima completare tutti i ${MARSALA_POIS.length} luoghi di Marsala per attivare il Prestigio!`,
+      });
+      return;
+    }
+
+    const updatedUser = await activateUserPrestige(user.id);
+    const easterEggs = await getUserEasterEggs(user.id);
+
+    res.json({
+      user: serializeUser(updatedUser),
+      unlocks: {},
+      easterEggs,
+      dailyBounty: buildDailyBounty(updatedUser),
+      totalXp: computeTotalXp({}, easterEggs, updatedUser.bonusXp),
+    });
+  } catch (err) {
+    console.error('[PRESTIGE ERROR]', err);
+    res.status(500).json({ error: 'Errore durante l’attivazione del Prestigio.' });
+  }
+});
+
 app.post('/api/progress/unlock', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    const user = await findUserById(req.userId!);
+    if (!user) {
+      res.status(404).json({ error: 'Utente non trovato.' });
+      return;
+    }
+
     const { poiId, lat, lng, accuracy, photoDataUrl } = req.body as {
       poiId?: string;
       lat?: number;
@@ -298,47 +364,79 @@ app.post('/api/progress/unlock', authMiddleware, async (req: AuthRequest, res: R
       return;
     }
 
+    const requiredRadius = getEffectiveUnlockRadius(poi, user.prestige);
     const gpsMargin = Math.min(Math.max(accuracy || 0, 0), 45);
     const distance = haversineMeters(lat, lng, poi.lat, poi.lng);
 
-    if (distance > poi.unlockRadiusMeters + gpsMargin) {
+    if (distance > requiredRadius + gpsMargin) {
       res.status(403).json({
-        error: `Sei a ${Math.round(distance)}m da ${poi.name}. Avvicinati entro ${poi.unlockRadiusMeters}m!`,
+        error: `Sei a ${Math.round(distance)}m da ${poi.name}. Avvicinati entro ${requiredRadius}m!`,
         distance: Math.round(distance),
       });
       return;
     }
 
-    const unlock = await upsertUnlock(req.userId!, {
+    // In Prestigio +25% XP e Card Olografica automatica
+    const earnedXp =
+      user.prestige > 0 ? Math.round(poi.xp * (1 + user.prestige * 0.25)) : poi.xp;
+    const isHolo = user.prestige > 0;
+
+    const unlock = await upsertUnlock(user.id, {
       poiId: poi.id,
       photoDataUrl,
       lat,
       lng,
       accuracy: Math.round(accuracy || 0),
-      xpEarned: poi.xp,
+      xpEarned: earnedXp,
+      isHolo,
     });
 
-    const unlocks = await getUserUnlocks(req.userId!);
+    // Verifica Obiettivo del Giorno (Daily Bounty)
+    const todayStr = getItalyDateString();
+    const yesterdayStr = getItalyDateString(new Date(Date.now() - 86400000));
+    const dailyBountyId = getDailyBountyPoiId(todayStr);
+
+    let bountyResult = {
+      claimedNow: false,
+      bountyXpAwarded: 0,
+      bountyStreak: user.bountyStreak,
+      bonusXp: user.bonusXp,
+    };
+
+    if (poi.id === dailyBountyId) {
+      bountyResult = await claimDailyBountyReward(user.id, todayStr, yesterdayStr);
+    }
+
+    const unlocks = await getUserUnlocks(user.id);
     const newlyUnlockedEggs: string[] = [];
 
     const wineries = ['cantine-florio', 'cantine-pellegrino', 'cantine-donnafugata'];
     if (wineries.every((id) => Boolean(unlocks[id]))) {
-      const added = await addEasterEgg(req.userId!, 'woodhouse-1773');
+      const added = await addEasterEgg(user.id, 'woodhouse-1773');
       if (added) newlyUnlockedEggs.push('woodhouse-1773');
     }
 
     const centroIds = MARSALA_POIS.filter((p) => p.category === 'CENTRO_STORICO').map((p) => p.id);
     if (centroIds.every((id) => Boolean(unlocks[id]))) {
-      const added = await addEasterEgg(req.userId!, 'custode-cassaro');
+      const added = await addEasterEgg(user.id, 'custode-cassaro');
       if (added) newlyUnlockedEggs.push('custode-cassaro');
     }
 
-    const easterEggs = await getUserEasterEggs(req.userId!);
+    const [easterEggs, freshUser] = await Promise.all([
+      getUserEasterEggs(user.id),
+      findUserById(user.id),
+    ]);
+    const currentUser = freshUser || user;
+
     res.json({
       unlock,
+      user: serializeUser(currentUser),
       easterEggs,
       newlyUnlockedEggs,
-      totalXp: computeTotalXp(unlocks, easterEggs),
+      bountyClaimedNow: bountyResult.claimedNow,
+      bountyXpAwarded: bountyResult.bountyXpAwarded,
+      dailyBounty: buildDailyBounty(currentUser),
+      totalXp: computeTotalXp(unlocks, easterEggs, currentUser.bonusXp),
     });
   } catch (err) {
     console.error('[UNLOCK ERROR]', err);
@@ -348,6 +446,12 @@ app.post('/api/progress/unlock', authMiddleware, async (req: AuthRequest, res: R
 
 app.post('/api/progress/easter-egg', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    const user = await findUserById(req.userId!);
+    if (!user) {
+      res.status(404).json({ error: 'Utente non trovato.' });
+      return;
+    }
+
     const { eggId } = req.body as { eggId?: string };
     const egg = EASTER_EGGS.find((e) => e.id === eggId);
     if (!egg) {
@@ -355,16 +459,16 @@ app.post('/api/progress/easter-egg', authMiddleware, async (req: AuthRequest, re
       return;
     }
 
-    const isNew = await addEasterEgg(req.userId!, egg.id);
+    const isNew = await addEasterEgg(user.id, egg.id);
     const [unlocks, easterEggs] = await Promise.all([
-      getUserUnlocks(req.userId!),
-      getUserEasterEggs(req.userId!),
+      getUserUnlocks(user.id),
+      getUserEasterEggs(user.id),
     ]);
     res.json({
       isNew,
       egg,
       easterEggs,
-      totalXp: computeTotalXp(unlocks, easterEggs),
+      totalXp: computeTotalXp(unlocks, easterEggs, user.bonusXp),
     });
   } catch (err) {
     console.error('[EASTER EGG ERROR]', err);
@@ -379,12 +483,19 @@ app.get('/api/leaderboard', authMiddleware, async (_req: AuthRequest, res: Respo
       .map((r) => ({
         nickname: r.nickname,
         avatar: r.avatar,
+        prestige: r.prestige,
+        bountyStreak: r.bountyStreak,
         unlockedCount: r.unlockedCount,
         percent: Math.round((r.unlockedCount / MARSALA_POIS.length) * 100),
         easterEggCount: r.easterEggs.length,
-        totalXp: r.poiXp + computeEggXp(r.easterEggs),
+        totalXp: r.bonusXp + r.poiXp + computeEggXp(r.easterEggs),
       }))
-      .sort((a, b) => b.totalXp - a.totalXp || b.unlockedCount - a.unlockedCount)
+      .sort(
+        (a, b) =>
+          b.totalXp - a.totalXp ||
+          b.prestige - a.prestige ||
+          b.unlockedCount - a.unlockedCount
+      )
       .slice(0, 20);
 
     res.json({ leaderboard });

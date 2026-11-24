@@ -12,7 +12,8 @@ export interface AvatarConfig {
 export type CosmeticRequirement =
   | { type: 'default' }
   | { type: 'cards'; count: number }
-  | { type: 'easter_egg'; eggId: string; eggTitle: string };
+  | { type: 'easter_egg'; eggId: string; eggTitle: string }
+  | { type: 'prestige'; level: number };
 
 export interface CosmeticItem {
   id: string;
@@ -143,6 +144,14 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     previewColor: '#22d3ee',
     requirement: { type: 'easter_egg', eggId: 'notte-lilibeo', eggTitle: 'Notte di Lilibeo' },
   },
+  {
+    id: 'glasses-holo',
+    slot: 'glasses',
+    name: 'Visore Olografico ★1',
+    description: 'Lenti prismatiche riservate ai veterani del New Game+.',
+    previewColor: '#e879f9',
+    requirement: { type: 'prestige', level: 1 },
+  },
 
   // ================= MAGLIE (top) =================
   {
@@ -201,6 +210,14 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     previewColor: '#f59e0b',
     requirement: { type: 'cards', count: 15 },
   },
+  {
+    id: 'top-prestige-cape',
+    slot: 'top',
+    name: 'Mantello Lilibeo ★1',
+    description: 'Manto reale con spallacci d’oro per chi ha completato Marsala.',
+    previewColor: '#c026d3',
+    requirement: { type: 'prestige', level: 1 },
+  },
 
   // ================= PANTALONI (bottom) =================
   {
@@ -256,19 +273,23 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
 export function isCosmeticUnlocked(
   item: CosmeticItem,
   unlockedCardsCount: number,
-  easterEggs: string[]
+  easterEggs: string[],
+  prestige = 0
 ): boolean {
+  const effectiveCards = prestige > 0 ? 20 : unlockedCardsCount;
   if (item.requirement.type === 'default') return true;
-  if (item.requirement.type === 'cards') return unlockedCardsCount >= item.requirement.count;
+  if (item.requirement.type === 'cards') return effectiveCards >= item.requirement.count;
+  if (item.requirement.type === 'prestige') return prestige >= item.requirement.level;
   return easterEggs.includes(item.requirement.eggId);
 }
 
 export function getUnlockedCosmeticIds(
   unlockedCardsCount: number,
-  easterEggs: string[]
+  easterEggs: string[],
+  prestige = 0
 ): string[] {
   return COSMETICS_CATALOG.filter((item) =>
-    isCosmeticUnlocked(item, unlockedCardsCount, easterEggs)
+    isCosmeticUnlocked(item, unlockedCardsCount, easterEggs, prestige)
   ).map((item) => item.id);
 }
 
@@ -276,6 +297,9 @@ export function getRequirementLabel(req: CosmeticRequirement): string {
   if (req.type === 'default') return 'Disponibile subito';
   if (req.type === 'cards') {
     return req.count === 1 ? 'Sblocca 1 Card' : `Sblocca ${req.count} Card`;
+  }
+  if (req.type === 'prestige') {
+    return `Attiva Prestigio ★${req.level}`;
   }
   return `Segreto: ${req.eggTitle}`;
 }

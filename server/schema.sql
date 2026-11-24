@@ -4,6 +4,10 @@ CREATE TABLE IF NOT EXISTS users (
   nickname TEXT NOT NULL,
   password_hash TEXT NOT NULL,
   avatar_config JSONB NOT NULL DEFAULT '{"gender":"male","hat":"hat-cap-red","glasses":"glasses-none","top":"top-explorer","bottom":"bottom-jeans"}'::jsonb,
+  prestige INTEGER NOT NULL DEFAULT 0,
+  bonus_xp INTEGER NOT NULL DEFAULT 0,
+  bounty_streak INTEGER NOT NULL DEFAULT 0,
+  last_bounty_date TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -18,6 +22,7 @@ CREATE TABLE IF NOT EXISTS unlocks (
   lng DOUBLE PRECISION NOT NULL,
   accuracy INTEGER NOT NULL DEFAULT 0,
   xp_earned INTEGER NOT NULL,
+  is_holo BOOLEAN NOT NULL DEFAULT FALSE,
   unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, poi_id)
 );

@@ -1,42 +1,51 @@
-import React, { useState } from "react";
-import {
-  EASTER_EGGS,
-  MARSALA_POIS,
-  type PoiDefinition,
-} from "../../shared/pois";
-import type { RealGpsState } from "../hooks/useRealGps";
-import type { LeaderboardEntry, UnlockData, UserProfile } from "../types/game";
-import { sound8bit } from "../utils/sound8bit";
+import React, { useState } from 'react';
+import { EASTER_EGGS, MARSALA_POIS, type PoiDefinition } from '../../shared/pois';
+import type { RealGpsState } from '../hooks/useRealGps';
+import type {
+  DailyBountyInfo,
+  LeaderboardEntry,
+  UnlockData,
+  UserProfile,
+} from '../types/game';
+import { sound8bit } from '../utils/sound8bit';
 import { PixelAvatar } from './PixelAvatar';
 
 interface HudBarProps {
   user: UserProfile;
   unlockedCount: number;
   totalXp: number;
+  dailyBounty: DailyBountyInfo | null;
   gps: RealGpsState;
   onTitleTap: () => void;
   onSkyTap: () => void;
   onRadarTap: () => void;
   onProgressTap: () => void;
+  onSelectBountyPoi: (poi: PoiDefinition) => void;
 }
 
 export const HudBar: React.FC<HudBarProps> = ({
   user,
   unlockedCount,
   totalXp,
+  dailyBounty,
   gps,
   onTitleTap,
   onSkyTap,
   onRadarTap,
   onProgressTap,
+  onSelectBountyPoi,
 }) => {
   const percent = Math.round((unlockedCount / MARSALA_POIS.length) * 100);
+  const bountyPoi = dailyBounty
+    ? MARSALA_POIS.find((p) => p.id === dailyBounty.poiId)
+    : undefined;
+
   const gpsColor =
-    gps.status === "LOCKED"
-      ? "text-[#38e54d]"
-      : gps.status === "SEARCHING"
-        ? "text-[#ffd166]"
-        : "text-[#ff4d6d]";
+    gps.status === 'LOCKED'
+      ? 'text-[#38e54d]'
+      : gps.status === 'SEARCHING'
+        ? 'text-[#ffd166]'
+        : 'text-[#ff4d6d]';
 
   return (
     <header className="absolute top-0 left-0 right-0 z-[700] pointer-events-none px-2 safe-top flex flex-col gap-1.5">
@@ -50,20 +59,28 @@ export const HudBar: React.FC<HudBarProps> = ({
               src="/Marsala-Quest-8bit-ico.png"
               alt="Logo"
               className="w-9 h-9 border-2 border-[#ffd166] shrink-0"
-              style={{ imageRendering: "pixelated" }}
+              style={{ imageRendering: 'pixelated' }}
             />
             <div className="min-w-0">
-              <span className="font-pixel text-[9px] sm:text-[11px] text-[#ffd166] block truncate">
-                MARSALA 8-BIT
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-pixel text-[9px] sm:text-[11px] text-[#ffd166] truncate">
+                  MARSALA 8-BIT
+                </span>
+                {user.prestige > 0 && (
+                  <span className="bg-[#a21caf] border border-[#f0abfc] px-1 font-pixel text-[7px] text-white shrink-0">
+                    ★P{user.prestige}
+                  </span>
+                )}
+              </div>
               <span className="text-lg sm:text-xl text-[#4cc9f0] leading-none block truncate">
-                👾 {user.nickname} •{" "}
-                <strong className="text-[#38e54d]">{totalXp} XP</strong>
+                👾 {user.nickname} • <strong className="text-[#38e54d]">{totalXp} XP</strong>
+                {user.bountyStreak > 0 && (
+                  <strong className="text-[#f0abfc] ml-1.5">🔥{user.bountyStreak}d</strong>
+                )}
               </span>
             </div>
           </button>
 
-          {/* Icona Sole per Easter Egg Tramonto dello Stagnone (3 tap) */}
           <button
             onClick={onSkyTap}
             className="nes-btn w-9 h-9 bg-[#26335c] flex items-center justify-center text-base shrink-0"
@@ -78,16 +95,16 @@ export const HudBar: React.FC<HudBarProps> = ({
           className="bg-[#0b0e1a] border-2 border-[#4cc9f0] px-2 py-1 text-base sm:text-lg shrink-0"
         >
           <span className={gpsColor}>
-            {gps.status === "LOCKED"
+            {gps.status === 'LOCKED'
               ? `🛰 ±${gps.accuracy}m`
-              : gps.status === "SEARCHING"
-                ? "🛰 GPS..."
-                : "⚠ NO GPS"}
+              : gps.status === 'SEARCHING'
+                ? '🛰 GPS...'
+                : '⚠ NO GPS'}
           </span>
         </button>
       </div>
 
-      {/* Barra progresso (4 tap = Easter Egg Notte di Lilibeo) */}
+      {/* Barra progresso (4 tap = Notte di Lilibeo) */}
       <button
         type="button"
         onClick={onProgressTap}
@@ -98,15 +115,40 @@ export const HudBar: React.FC<HudBarProps> = ({
         </span>
         <div className="flex-1 h-2.5 bg-[#090d18] border-2 border-[#f4f1de]">
           <div
-            className="h-full bg-[#38e54d] transition-all duration-700"
+            className={`h-full transition-all duration-700 ${
+              user.prestige > 0 ? 'bg-[#e879f9]' : 'bg-[#38e54d]'
+            }`}
             style={{
               width: `${percent}%`,
               backgroundImage:
-                "repeating-linear-gradient(90deg, rgba(0,0,0,0.22) 0px, rgba(0,0,0,0.22) 3px, transparent 3px, transparent 8px)",
+                'repeating-linear-gradient(90deg, rgba(0,0,0,0.22) 0px, rgba(0,0,0,0.22) 3px, transparent 3px, transparent 8px)',
             }}
           />
         </div>
       </button>
+
+      {/* Pillola compatta Obiettivo del Giorno */}
+      {dailyBounty && bountyPoi && (
+        <button
+          type="button"
+          onClick={() => {
+            sound8bit.click();
+            onSelectBountyPoi(bountyPoi);
+          }}
+          className={`pointer-events-auto px-2.5 py-1 border-[2px] flex items-center justify-between gap-2 text-left shadow-[2px_2px_0_#000] ${
+            dailyBounty.completedToday
+              ? 'bg-[#102a1d]/95 border-[#38e54d]'
+              : 'bg-[#2a153d]/95 border-[#e879f9]'
+          }`}
+        >
+          <span className="font-pixel text-[7px] text-[#f0abfc] truncate">
+            {dailyBounty.completedToday
+              ? `✅ BOUNTY OGGI COMPLETATO: ${bountyPoi.name}`
+              : `🎯 OGGI: ${bountyPoi.name} (+${dailyBounty.bonusXp} XP)`}
+          </span>
+          <span className="font-pixel text-[7px] text-[#ffd166] shrink-0">APRI ▶</span>
+        </button>
+      )}
 
       {gps.errorMessage && (
         <div className="pointer-events-auto bg-[#4c0519] border-[3px] border-[#ff4d6d] px-2.5 py-1.5 flex items-center justify-between gap-2">
@@ -130,6 +172,7 @@ export const HudBar: React.FC<HudBarProps> = ({
 
 interface BottomDockProps {
   unlockedCount: number;
+  prestige: number;
   isCompleted: boolean;
   crtEnabled: boolean;
   muted: boolean;
@@ -137,6 +180,7 @@ interface BottomDockProps {
   onOpenWardrobe: () => void;
   onOpenLeaderboard: () => void;
   onOpenMedal: () => void;
+  onOpenPrestigeConfirm: () => void;
   onToggleCrt: () => void;
   onToggleMute: () => void;
   onLogout: () => void;
@@ -144,6 +188,7 @@ interface BottomDockProps {
 
 export const BottomDock: React.FC<BottomDockProps> = ({
   unlockedCount,
+  prestige,
   isCompleted,
   crtEnabled,
   muted,
@@ -151,22 +196,37 @@ export const BottomDock: React.FC<BottomDockProps> = ({
   onOpenWardrobe,
   onOpenLeaderboard,
   onOpenMedal,
+  onOpenPrestigeConfirm,
   onToggleCrt,
   onToggleMute,
   onLogout,
 }) => (
   <nav className="fixed bottom-0 left-0 right-0 z-[700] pointer-events-none px-1.5 safe-bottom">
-    <div className="max-w-xl mx-auto pointer-events-auto flex flex-col gap-2">
-      {isCompleted && (
-        <button
-          onClick={() => {
-            sound8bit.victoryMedal();
-            onOpenMedal();
-          }}
-          className="nes-btn w-full py-2.5 bg-[#ffd166] text-black text-[9px]"
-        >
-          🏅 APRI LA MEDAGLIA D&apos;ORO DI LILIBEO
-        </button>
+    <div className="max-w-xl mx-auto pointer-events-auto flex flex-col gap-1.5">
+      {(isCompleted || prestige > 0) && (
+        <div className="flex gap-1.5">
+          <button
+            onClick={() => {
+              sound8bit.victoryMedal();
+              onOpenMedal();
+            }}
+            className="nes-btn flex-1 py-2 bg-[#ffd166] text-black text-[8px]"
+          >
+            🏅 MEDAGLIA LILIBEO
+          </button>
+
+          {isCompleted && (
+            <button
+              onClick={() => {
+                sound8bit.easterEgg();
+                onOpenPrestigeConfirm();
+              }}
+              className="nes-btn flex-1 py-2 bg-[#c026d3] text-white text-[8px]"
+            >
+              ⚡ NEW GAME+ (★P{prestige + 1})
+            </button>
+          )}
+        </div>
       )}
 
       <div className="nes-box p-1 grid grid-cols-6 gap-1">
@@ -236,6 +296,8 @@ export const BottomDock: React.FC<BottomDockProps> = ({
 interface DexModalProps {
   unlocks: Record<string, UnlockData>;
   easterEggs: string[];
+  dailyBounty: DailyBountyInfo | null;
+  bountyStreak: number;
   onSelectPoi: (poi: PoiDefinition) => void;
   onTrigger1860: () => void;
   onTriggerPunic: () => void;
@@ -245,24 +307,26 @@ interface DexModalProps {
 export const DexModal: React.FC<DexModalProps> = ({
   unlocks,
   easterEggs,
+  dailyBounty,
+  bountyStreak,
   onSelectPoi,
   onTrigger1860,
   onTriggerPunic,
   onClose,
 }) => {
-  const [tab, setTab] = useState<"pois" | "eggs">("pois");
-  const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<'pois' | 'eggs'>('pois');
+  const [query, setQuery] = useState('');
+
+  const bountyPoi = dailyBounty
+    ? MARSALA_POIS.find((p) => p.id === dailyBounty.poiId)
+    : undefined;
 
   const handleQueryChange = (val: string) => {
     setQuery(val);
     const cleaned = val.trim().toLowerCase();
-    if (cleaned === "1860") {
+    if (cleaned === '1860') {
       onTrigger1860();
-    } else if (
-      cleaned === "397" ||
-      cleaned === "lilibeo" ||
-      cleaned === "lilybaeum"
-    ) {
+    } else if (cleaned === '397' || cleaned === 'lilibeo' || cleaned === 'lilybaeum') {
       onTriggerPunic();
     }
   };
@@ -270,7 +334,7 @@ export const DexModal: React.FC<DexModalProps> = ({
   const filtered = MARSALA_POIS.filter(
     (p) =>
       p.name.toLowerCase().includes(query.toLowerCase()) ||
-      p.zone.toLowerCase().includes(query.toLowerCase()),
+      p.zone.toLowerCase().includes(query.toLowerCase())
   );
 
   return (
@@ -281,12 +345,10 @@ export const DexModal: React.FC<DexModalProps> = ({
             <button
               onClick={() => {
                 sound8bit.click();
-                setTab("pois");
+                setTab('pois');
               }}
               className={`nes-btn flex-1 py-2 text-[8px] sm:text-[9px] ${
-                tab === "pois"
-                  ? "bg-[#ffd166] text-black"
-                  : "bg-[#26335c] text-slate-300"
+                tab === 'pois' ? 'bg-[#ffd166] text-black' : 'bg-[#26335c] text-slate-300'
               }`}
             >
               DEX ({Object.keys(unlocks).length}/{MARSALA_POIS.length})
@@ -294,12 +356,10 @@ export const DexModal: React.FC<DexModalProps> = ({
             <button
               onClick={() => {
                 sound8bit.click();
-                setTab("eggs");
+                setTab('eggs');
               }}
               className={`nes-btn flex-1 py-2 text-[8px] sm:text-[9px] ${
-                tab === "eggs"
-                  ? "bg-[#38e54d] text-black"
-                  : "bg-[#26335c] text-slate-300"
+                tab === 'eggs' ? 'bg-[#38e54d] text-black' : 'bg-[#26335c] text-slate-300'
               }`}
             >
               SEGRETI ({easterEggs.length}/{EASTER_EGGS.length})
@@ -313,8 +373,33 @@ export const DexModal: React.FC<DexModalProps> = ({
           </button>
         </div>
 
-        {tab === "pois" ? (
+        {tab === 'pois' ? (
           <>
+            {/* Box Obiettivo del Giorno */}
+            {dailyBounty && bountyPoi && (
+              <button
+                type="button"
+                onClick={() => {
+                  sound8bit.click();
+                  onClose();
+                  onSelectPoi(bountyPoi);
+                }}
+                className="mb-2.5 w-full text-left border-[3px] border-[#e879f9] bg-[#2a153d] p-2.5 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <span className="font-pixel text-[8px] text-[#f0abfc] block">
+                    🎯 OBIETTIVO DEL GIORNO • STREAK 🔥{bountyStreak}d
+                  </span>
+                  <span className="text-xl text-white font-bold truncate block">
+                    {bountyPoi.icon} {bountyPoi.name}
+                  </span>
+                </div>
+                <span className="font-pixel text-[8px] px-2 py-1 bg-[#ffd166] text-black shrink-0">
+                  {dailyBounty.completedToday ? '✓ FATTO' : `+${dailyBounty.bonusXp} XP`}
+                </span>
+              </button>
+            )}
+
             <input
               type="text"
               value={query}
@@ -325,6 +410,7 @@ export const DexModal: React.FC<DexModalProps> = ({
             <div className="overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2.5 pr-1">
               {filtered.map((poi) => {
                 const u = unlocks[poi.id];
+                const isBounty = dailyBounty?.poiId === poi.id;
                 return (
                   <button
                     key={poi.id}
@@ -334,20 +420,30 @@ export const DexModal: React.FC<DexModalProps> = ({
                       onSelectPoi(poi);
                     }}
                     className={`text-left border-[3px] p-2.5 active:scale-[0.99] transition ${
-                      u
-                        ? "border-[#ffd166] bg-[#1e294d]"
-                        : "border-[#2e3d6b] bg-[#0d1324] opacity-90"
+                      u?.isHolo
+                        ? 'holo-card bg-[#25173d]'
+                        : u
+                          ? 'border-[#ffd166] bg-[#1e294d]'
+                          : isBounty
+                            ? 'border-[#e879f9] bg-[#231433]'
+                            : 'border-[#2e3d6b] bg-[#0d1324] opacity-90'
                     }`}
                   >
                     <div className="flex justify-between items-center gap-1">
                       <span className="font-pixel text-[8px] text-[#ffd166] leading-snug">
+                        {isBounty ? '🎯 ' : ''}
                         {poi.icon} {poi.name}
                       </span>
                       <span className="text-base text-[#38e54d] whitespace-nowrap">
-                        +{poi.xp}XP
+                        +{u ? u.xpEarned : poi.xp}XP
                       </span>
                     </div>
-                    <p className="text-base text-[#94a3b8]">{poi.zone}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-base text-[#94a3b8] truncate">{poi.zone}</p>
+                      {u?.isHolo && (
+                        <span className="font-pixel text-[7px] text-[#f0abfc]">✦ HOLO</span>
+                      )}
+                    </div>
                     {u ? (
                       <img
                         src={u.photoDataUrl}
@@ -372,16 +468,12 @@ export const DexModal: React.FC<DexModalProps> = ({
                 <div
                   key={egg.id}
                   className={`border-[3px] p-3 ${
-                    found
-                      ? "border-[#38e54d] bg-[#102a1d]"
-                      : "border-[#2e3d6b] bg-[#0d1324]"
+                    found ? 'border-[#38e54d] bg-[#102a1d]' : 'border-[#2e3d6b] bg-[#0d1324]'
                   }`}
                 >
                   <div className="flex justify-between items-center">
                     <span className="font-pixel text-[9px] text-[#ffd166]">
-                      {found
-                        ? `${egg.badge} ${egg.title}`
-                        : "??? SEGRETO BLOCCATO"}
+                      {found ? `${egg.badge} ${egg.title}` : '??? SEGRETO BLOCCATO'}
                     </span>
                     <span className="text-lg text-[#38e54d]">+{egg.xp} XP</span>
                   </div>
@@ -429,15 +521,23 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
                 : 'border-[#2e3d6b] bg-[#0d1324]'
             }`}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
               <span className="font-pixel text-[9px] text-[#4cc9f0] shrink-0">#{i + 1}</span>
               <div className="w-9 h-11 bg-[#141b33] border-2 border-black flex items-center justify-center shrink-0">
                 <PixelAvatar avatar={e.avatar} size={26} />
               </div>
               <div className="min-w-0">
-                <span className="font-bold block truncate leading-none">{e.nickname}</span>
+                <div className="flex items-center gap-1">
+                  <span className="font-bold truncate leading-none">{e.nickname}</span>
+                  {e.prestige > 0 && (
+                    <span className="bg-[#a21caf] px-1 font-pixel text-[7px] text-white shrink-0">
+                      ★P{e.prestige}
+                    </span>
+                  )}
+                </div>
                 <span className="text-[#94a3b8] text-base leading-none">
-                  {e.unlockedCount} card ({e.percent}%)
+                  {e.unlockedCount}/20 ({e.percent}%)
+                  {e.bountyStreak > 0 ? ` • 🔥${e.bountyStreak}d` : ''}
                 </span>
               </div>
             </div>

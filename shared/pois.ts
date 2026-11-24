@@ -441,3 +441,30 @@ export function haversineMeters(
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+
+/** Restituisce la data corrente in Italia nel formato YYYY-MM-DD */
+export function getItalyDateString(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Rome',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+/** Seleziona in modo deterministico lo stesso POI del giorno per tutti i giocatori */
+export function getDailyBountyPoiId(dateStr: string = getItalyDateString()): string {
+  let hash = 2166136261;
+  for (let i = 0; i < dateStr.length; i++) {
+    hash ^= dateStr.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const index = Math.abs(hash) % MARSALA_POIS.length;
+  return MARSALA_POIS[index].id;
+}
+
+/** In Modalità Prestigio il raggio GPS richiesto diventa più impegnativo */
+export function getEffectiveUnlockRadius(poi: PoiDefinition, prestige: number): number {
+  if (prestige <= 0) return poi.unlockRadiusMeters;
+  return Math.max(35, Math.round(poi.unlockRadiusMeters * 0.45));
+}

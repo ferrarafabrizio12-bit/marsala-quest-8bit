@@ -45,7 +45,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
       <div className="nes-box-gold w-full max-w-md p-5 sm:p-6 relative z-10 my-4">
         <div className="text-center mb-5">
           <img
-            src="/logo.png"
+            src="/Marsala-Quest-8bit-ico.png"
             alt="Marsala Quest 8-Bit"
             className="w-20 h-20 mx-auto mb-3 border-[3px] border-[#ffd166] shadow-[4px_4px_0_#000]"
             style={{ imageRendering: 'pixelated' }}
