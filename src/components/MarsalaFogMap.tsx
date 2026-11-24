@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import {
   MARSALA_BOUNDS,
@@ -41,13 +41,9 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   onSelectPoi,
   onFitMarsalaTap,
 }) => {
-  const colorContainerRef = useRef<HTMLDivElement | null>(null);
-  const greyContainerRef = useRef<HTMLDivElement | null>(null);
-  const mainContainerRef = useRef<HTMLDivElement | null>(null);
-
-  const colorMapRef = useRef<L.Map | null>(null);
-  const greyMapRef = useRef<L.Map | null>(null);
-  const mainMapRef = useRef<L.Map | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const greyPaneRef = useRef<HTMLElement | null>(null);
 
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const poiMarkersRef = useRef(new Map<string, L.Marker>());
@@ -63,51 +59,65 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   const isMapCompleted = Object.keys(unlocks).length >= MARSALA_POIS.length;
   const showLabels = zoomLevel >= 15;
 
-  const updateFogAndSync = (syncView = true) => {
-    const mainMap = mainMapRef.current;
-    const colorMap = colorMapRef.current;
-    const greyMap = greyMapRef.current;
-    const greyEl = greyContainerRef.current;
-    if (!mainMap || !colorMap || !greyMap || !greyEl) return;
+  const computeRings = useCallback((map: L.Map, currentUnlocks: Record<string, UnlockData>) => {
+    const zoom = map.getZoom();
+    const nextRings: ScreenCircle[] = [];
+    for (const poi of MARSALA_POIS) {
+      if (!currentUnlocks[poi.id]) continue;
+      const pt = map.latLngToContainerPoint([poi.lat, poi.lng]);
+      const metersPerPixel =
+        (156543.03392 * Math.cos((poi.lat * Math.PI) / 180)) / Math.pow(2, zoom);
+      const r = poi.fogRevealRadiusMeters / metersPerPixel;
+      nextRings.push({ id: poi.id, x: pt.x, y: pt.y, r });
+    }
+    setRings(nextRings);
+  }, []);
 
-    const center = mainMap.getCenter();
-    const zoom = mainMap.getZoom();
+  const syncMaskPositionOnly = useCallback(() => {
+    const map = mapRef.current;
+    const greyPane = greyPaneRef.current;
+    if (!map || !greyPane) return;
+
+    const currentUnlocks = unlocksRef.current;
+    const unlockedCount = Object.keys(currentUnlocks).length;
+
+    if (unlockedCount > 0 && unlockedCount < MARSALA_POIS.length) {
+      const layerOrigin = map.containerPointToLayerPoint([0, 0]);
+      greyPane.style.maskPosition = `${layerOrigin.x}px ${layerOrigin.y}px`;
+      greyPane.style.setProperty('-webkit-mask-position', `${layerOrigin.x}px ${layerOrigin.y}px`);
+      computeRings(map, currentUnlocks);
+    }
+  }, [computeRings]);
+
+  const rebuildFogMask = useCallback(() => {
+    const map = mapRef.current;
+    const greyPane = greyPaneRef.current;
+    if (!map || !greyPane) return;
+
+    const zoom = map.getZoom();
     setZoomLevel(zoom);
-
-    if (syncView) {
-      colorMap.setView(center, zoom, { animate: false });
-      greyMap.setView(center, zoom, { animate: false });
-    }
-
-    const mainPane = mainMap.getPane('mapPane');
-    const colorPane = colorMap.getPane('mapPane');
-    const greyPane = greyMap.getPane('mapPane');
-    if (mainPane && colorPane && greyPane) {
-      colorPane.style.transform = mainPane.style.transform;
-      greyPane.style.transform = mainPane.style.transform;
-    }
 
     const currentUnlocks = unlocksRef.current;
     const unlockedCount = Object.keys(currentUnlocks).length;
 
     if (unlockedCount >= MARSALA_POIS.length) {
-      greyEl.style.opacity = '0';
-      greyEl.style.maskImage = 'none';
-      greyEl.style.setProperty('-webkit-mask-image', 'none');
+      greyPane.style.opacity = '0';
+      greyPane.style.maskImage = 'none';
+      greyPane.style.setProperty('-webkit-mask-image', 'none');
       setRings([]);
       return;
     }
 
-    greyEl.style.opacity = '1';
+    greyPane.style.opacity = '1';
 
     if (unlockedCount === 0) {
-      greyEl.style.maskImage = 'none';
-      greyEl.style.setProperty('-webkit-mask-image', 'none');
+      greyPane.style.maskImage = 'none';
+      greyPane.style.setProperty('-webkit-mask-image', 'none');
       setRings([]);
       return;
     }
 
-    const size = mainMap.getSize();
+    const size = map.getSize();
     const scale = 3;
     const cw = Math.max(1, Math.ceil(size.x / scale));
     const ch = Math.max(1, Math.ceil(size.y / scale));
@@ -129,15 +139,12 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
 
     ctx.globalCompositeOperation = 'destination-out';
 
-    const nextRings: ScreenCircle[] = [];
     for (const poi of MARSALA_POIS) {
       if (!currentUnlocks[poi.id]) continue;
-      const pt = mainMap.latLngToContainerPoint([poi.lat, poi.lng]);
+      const pt = map.latLngToContainerPoint([poi.lat, poi.lng]);
       const metersPerPixel =
         (156543.03392 * Math.cos((poi.lat * Math.PI) / 180)) / Math.pow(2, zoom);
       const r = poi.fogRevealRadiusMeters / metersPerPixel;
-
-      nextRings.push({ id: poi.id, x: pt.x, y: pt.y, r });
 
       const cx = pt.x / scale;
       const cy = pt.y / scale;
@@ -152,172 +159,91 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
       ctx.fill();
     }
 
+    const layerOrigin = map.containerPointToLayerPoint([0, 0]);
     const maskUrl = `url(${canvas.toDataURL('image/png')})`;
-    greyEl.style.maskImage = maskUrl;
-    greyEl.style.setProperty('-webkit-mask-image', maskUrl);
-    greyEl.style.maskSize = '100% 100%';
-    greyEl.style.setProperty('-webkit-mask-size', '100% 100%');
-    greyEl.style.maskRepeat = 'no-repeat';
-    greyEl.style.setProperty('-webkit-mask-repeat', 'no-repeat');
 
-    setRings(nextRings);
-  };
+    greyPane.style.width = `${size.x}px`;
+    greyPane.style.height = `${size.y}px`;
+    greyPane.style.maskImage = maskUrl;
+    greyPane.style.setProperty('-webkit-mask-image', maskUrl);
+    greyPane.style.maskSize = `${size.x}px ${size.y}px`;
+    greyPane.style.setProperty('-webkit-mask-size', `${size.x}px ${size.y}px`);
+    greyPane.style.maskRepeat = 'no-repeat';
+    greyPane.style.setProperty('-webkit-mask-repeat', 'no-repeat');
+    greyPane.style.maskPosition = `${layerOrigin.x}px ${layerOrigin.y}px`;
+    greyPane.style.setProperty('-webkit-mask-position', `${layerOrigin.x}px ${layerOrigin.y}px`);
+
+    computeRings(map, currentUnlocks);
+  }, [computeRings]);
 
   useEffect(() => {
-    if (
-      !colorContainerRef.current ||
-      !greyContainerRef.current ||
-      !mainContainerRef.current ||
-      mainMapRef.current
-    ) {
-      return;
-    }
+    if (!mapContainerRef.current || mapRef.current) return;
 
-    const sharedBoundsOpts: L.MapOptions = {
+    const map = L.map(mapContainerRef.current, {
       center: MARSALA_CENTER,
       zoom: 14,
       minZoom: 10,
       maxZoom: 18,
       maxBounds: MARSALA_BOUNDS,
       maxBoundsViscosity: 1.0,
-      inertia: false,
       zoomControl: false,
       zoomAnimation: false,
       fadeAnimation: false,
-    };
+    });
 
-    const sharedStaticOpts: L.MapOptions = {
-      ...sharedBoundsOpts,
-      attributionControl: false,
-      dragging: false,
-      touchZoom: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
-      boxZoom: false,
-      keyboard: false,
-    };
+    map.attributionControl.setPrefix('© OpenStreetMap • MARSALA QUEST 8-BIT');
 
-    const colorMap = L.map(colorContainerRef.current, sharedStaticOpts);
-    L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(colorMap);
+    // Pannello base a colori
+    const colorPane = map.createPane('colorPane');
+    colorPane.style.zIndex = '200';
+    colorPane.style.pointerEvents = 'none';
+    colorPane.classList.add('marsala-color-pane');
+    L.tileLayer(TILE_URL, { maxZoom: 19, pane: 'colorPane' }).addTo(map);
 
-    const greyMap = L.map(greyContainerRef.current, sharedStaticOpts);
-    L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(greyMap);
+    // Pannello grigio (nebbia) sullo stesso identico sistema di coordinate
+    const greyPane = map.createPane('greyPane');
+    greyPane.style.zIndex = '210';
+    greyPane.style.pointerEvents = 'none';
+    greyPane.classList.add('marsala-grey-pane');
+    greyPane.style.transition = 'opacity 0.8s ease';
+    L.tileLayer(TILE_URL, { maxZoom: 19, pane: 'greyPane' }).addTo(map);
 
-    const mainMap = L.map(mainContainerRef.current, sharedBoundsOpts);
-    mainMap.attributionControl.setPrefix('© OpenStreetMap • MARSALA QUEST 8-BIT');
+    mapRef.current = map;
+    greyPaneRef.current = greyPane;
 
-    colorMapRef.current = colorMap;
-    greyMapRef.current = greyMap;
-    mainMapRef.current = mainMap;
-
-    const boundsObj = L.latLngBounds(MARSALA_BOUNDS);
-
-    // Permette zoom-out completo su tutta Marsala e blocca il drag se l'area entra già nello schermo
     const syncFullMarsalaZoom = () => {
-      const fullMarsalaZoom = Math.max(10, mainMap.getBoundsZoom(MARSALA_BOUNDS, false));
-      mainMap.setMinZoom(fullMarsalaZoom);
-      colorMap.setMinZoom(fullMarsalaZoom);
-      greyMap.setMinZoom(fullMarsalaZoom);
-      if (mainMap.getZoom() < fullMarsalaZoom) {
-        mainMap.setZoom(fullMarsalaZoom, { animate: false });
+      const fullMarsalaZoom = Math.max(10, map.getBoundsZoom(MARSALA_BOUNDS, false));
+      map.setMinZoom(fullMarsalaZoom);
+      if (map.getZoom() < fullMarsalaZoom) {
+        map.setZoom(fullMarsalaZoom, { animate: false });
       }
-
-      const nw = mainMap.latLngToContainerPoint(boundsObj.getNorthWest());
-      const se = mainMap.latLngToContainerPoint(boundsObj.getSouthEast());
-      const size = mainMap.getSize();
-      const fitsCompletely = se.x - nw.x <= size.x + 2 && se.y - nw.y <= size.y + 2;
-
-      if (fitsCompletely) {
-        mainMap.dragging.disable();
-      } else {
-        mainMap.dragging.enable();
-      }
-
-      updateFogAndSync(true);
+      rebuildFogMask();
     };
 
-    // Blocco rigido frame-per-frame mentre tieni premuto il mouse/dito per trascinare
-    const draggable = (mainMap.dragging as unknown as { _draggable?: L.Draggable })._draggable;
-    let dragStartPanePos: L.Point | null = null;
-    let dragStartNw: L.Point | null = null;
-    let dragStartSe: L.Point | null = null;
-
-    const onDragStart = () => {
-      const pane = mainMap.getPane('mapPane');
-      if (!pane) return;
-      dragStartPanePos = L.DomUtil.getPosition(pane);
-      dragStartNw = mainMap.latLngToContainerPoint(boundsObj.getNorthWest());
-      dragStartSe = mainMap.latLngToContainerPoint(boundsObj.getSouthEast());
-    };
-
-    const onDrag = () => {
-      const pane = mainMap.getPane('mapPane');
-      if (!pane || !dragStartPanePos || !dragStartNw || !dragStartSe) return;
-
-      const currentPos = L.DomUtil.getPosition(pane);
-      const rawDx = currentPos.x - dragStartPanePos.x;
-      const rawDy = currentPos.y - dragStartPanePos.y;
-      const size = mainMap.getSize();
-
-      const boundsW = dragStartSe.x - dragStartNw.x;
-      const boundsH = dragStartSe.y - dragStartNw.y;
-
-      const clampedDx =
-        boundsW <= size.x
-          ? 0
-          : Math.min(-dragStartNw.x, Math.max(size.x - dragStartSe.x, rawDx));
-
-      const clampedDy =
-        boundsH <= size.y
-          ? 0
-          : Math.min(-dragStartNw.y, Math.max(size.y - dragStartSe.y, rawDy));
-
-      const clampedPos = L.point(
-        Math.round(dragStartPanePos.x + clampedDx),
-        Math.round(dragStartPanePos.y + clampedDy)
-      );
-      L.DomUtil.setPosition(pane, clampedPos);
-      updateFogAndSync(false);
-    };
-
-    const onDragEnd = () => {
-      dragStartPanePos = null;
-      dragStartNw = null;
-      dragStartSe = null;
-      updateFogAndSync(true);
-    };
-
-    draggable?.on('dragstart', onDragStart);
-    draggable?.on('drag', onDrag);
-    draggable?.on('dragend', onDragEnd);
-
-    const handleMoveOrZoom = () => syncFullMarsalaZoom();
-    mainMap.on('moveend zoomend viewreset resize', handleMoveOrZoom);
+    map.on('move', syncMaskPositionOnly);
+    map.on('moveend zoomend viewreset', rebuildFogMask);
+    map.on('resize', syncFullMarsalaZoom);
     syncFullMarsalaZoom();
 
     return () => {
-      draggable?.off('dragstart', onDragStart);
-      draggable?.off('drag', onDrag);
-      draggable?.off('dragend', onDragEnd);
-      mainMap.off('moveend zoomend viewreset resize', handleMoveOrZoom);
-      mainMap.remove();
-      greyMap.remove();
-      colorMap.remove();
-      mainMapRef.current = null;
-      greyMapRef.current = null;
-      colorMapRef.current = null;
+      map.off('move', syncMaskPositionOnly);
+      map.off('moveend zoomend viewreset', rebuildFogMask);
+      map.off('resize', syncFullMarsalaZoom);
+      map.remove();
+      mapRef.current = null;
+      greyPaneRef.current = null;
       poiMarkersRef.current.clear();
       playerMarkerRef.current = null;
       accuracyCircleRef.current = null;
     };
-  }, []);
+  }, [rebuildFogMask, syncMaskPositionOnly]);
 
   useEffect(() => {
-    updateFogAndSync(true);
-  }, [unlocks]);
+    rebuildFogMask();
+  }, [unlocks, rebuildFogMask]);
 
   useEffect(() => {
-    const map = mainMapRef.current;
+    const map = mapRef.current;
     if (!map) return;
 
     MARSALA_POIS.forEach((poi) => {
@@ -416,7 +342,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   }, [unlocks, gps.lat, gps.lng, gps.accuracy, showLabels, dailyBountyPoiId, onSelectPoi]);
 
   useEffect(() => {
-    const map = mainMapRef.current;
+    const map = mapRef.current;
     if (!map || gps.lat === null || gps.lng === null) return;
 
     const avatarSvg = renderAvatarSvgString(avatar, 34, 42);
@@ -468,17 +394,9 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-[#0b0e1a]">
-      <div
-        ref={colorContainerRef}
-        className="absolute inset-0 z-0 pointer-events-none marsala-color-map"
-      />
+      <div ref={mapContainerRef} className="absolute inset-0 z-10 marsala-main-map" />
 
-      <div
-        ref={greyContainerRef}
-        className="absolute inset-0 z-10 pointer-events-none marsala-grey-map transition-opacity duration-1000"
-      />
-
-      <svg className="absolute inset-0 w-full h-full z-[15] pointer-events-none">
+      <svg className="absolute inset-0 w-full h-full z-[450] pointer-events-none">
         {!isMapCompleted &&
           rings.map((c) => (
             <circle
@@ -506,13 +424,11 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
         )}
       </svg>
 
-      <div ref={mainContainerRef} className="absolute inset-0 z-20 marsala-main-map" />
-
       <div className="absolute right-2.5 bottom-24 flex flex-col gap-2 z-[600]">
         <button
           onClick={() => {
             sound8bit.click();
-            mainMapRef.current?.zoomIn();
+            mapRef.current?.zoomIn();
           }}
           title="Zoom In"
           className="nes-btn w-12 h-12 bg-[#141b33] text-[#ffd166] text-base flex items-center justify-center"
@@ -525,7 +441,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
         <button
           onClick={() => {
             sound8bit.click();
-            mainMapRef.current?.zoomOut();
+            mapRef.current?.zoomOut();
           }}
           title="Zoom Out"
           className="nes-btn w-12 h-12 bg-[#141b33] text-[#ffd166] text-base flex items-center justify-center"
@@ -535,7 +451,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
         <button
           onClick={() => {
             sound8bit.click();
-            mainMapRef.current?.fitBounds(MARSALA_BOUNDS, {
+            mapRef.current?.fitBounds(MARSALA_BOUNDS, {
               padding: [24, 24],
               animate: false,
             });
@@ -550,7 +466,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
           onClick={() => {
             sound8bit.click();
             if (gps.lat !== null && gps.lng !== null) {
-              mainMapRef.current?.setView([gps.lat, gps.lng], 16, { animate: false });
+              mapRef.current?.setView([gps.lat, gps.lng], 16, { animate: false });
             } else {
               gps.retry();
             }

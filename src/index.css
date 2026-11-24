@@ -216,3 +216,36 @@ body {
 .bounty-pulse {
   animation: bountyPulse 1.4s ease-in-out infinite;
 }
+
+/* Pannelli mappa unificati (Colori + Nebbia Grigia) */
+.marsala-color-pane {
+  filter: saturate(1.25) contrast(1.06);
+}
+
+.marsala-grey-pane {
+  filter: grayscale(100%) contrast(1.18) brightness(0.75);
+}
+
+.theme-gameboy .marsala-color-pane {
+  filter: sepia(100%) hue-rotate(48deg) saturate(2.6) contrast(1.15);
+}
+
+.theme-gameboy .marsala-grey-pane {
+  filter: grayscale(100%) sepia(100%) hue-rotate(48deg) saturate(1.4) brightness(0.62);
+}
+
+.theme-sunset .marsala-color-pane {
+  filter: sepia(45%) hue-rotate(-22deg) saturate(1.85) contrast(1.08);
+}
+
+.theme-sunset .marsala-grey-pane {
+  filter: grayscale(85%) sepia(35%) hue-rotate(-25deg) brightness(0.72);
+}
+
+.theme-night .marsala-color-pane {
+  filter: invert(92%) hue-rotate(195deg) saturate(1.9) contrast(1.12);
+}
+
+.theme-night .marsala-grey-pane {
+  filter: grayscale(100%) invert(88%) contrast(1.25) brightness(0.68);
+}
