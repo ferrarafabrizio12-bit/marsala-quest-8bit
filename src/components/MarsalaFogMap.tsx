@@ -16,6 +16,7 @@ interface MarsalaFogMapProps {
   unlocks: Record<string, UnlockData>;
   justSyncedPoiId: string | null;
   onSelectPoi: (poi: PoiDefinition) => void;
+  onFitMarsalaTap: () => void;
 }
 
 interface ScreenCircle {
@@ -32,6 +33,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   unlocks,
   justSyncedPoiId,
   onSelectPoi,
+  onFitMarsalaTap,
 }) => {
   const colorContainerRef = useRef<HTMLDivElement | null>(null);
   const greyContainerRef = useRef<HTMLDivElement | null>(null);
@@ -53,8 +55,8 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   unlocksRef.current = unlocks;
 
   const isMapCompleted = Object.keys(unlocks).length >= MARSALA_POIS.length;
+  const showLabels = zoomLevel >= 15;
 
-  // Ricalcola la maschera grigio -> colore su ogni movimento/zoom o nuovo sblocco
   const updateFogAndSync = () => {
     const mainMap = mainMapRef.current;
     const colorMap = colorMapRef.current;
@@ -72,7 +74,6 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     const currentUnlocks = unlocksRef.current;
     const unlockedCount = Object.keys(currentUnlocks).length;
 
-    // 100% completato: nessuna nebbia grigia
     if (unlockedCount >= MARSALA_POIS.length) {
       greyEl.style.opacity = "0";
       greyEl.style.maskImage = "none";
@@ -83,7 +84,6 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
 
     greyEl.style.opacity = "1";
 
-    // 0 punti sbloccati: 100% mappa grigia senza alcun buco
     if (unlockedCount === 0) {
       greyEl.style.maskImage = "none";
       greyEl.style.setProperty("-webkit-mask-image", "none");
@@ -92,7 +92,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     }
 
     const size = mainMap.getSize();
-    const scale = 3; // 1/3 risoluzione per 60fps fluidi su smartphone e PC
+    const scale = 3;
     const cw = Math.max(1, Math.ceil(size.x / scale));
     const ch = Math.max(1, Math.ceil(size.y / scale));
 
@@ -108,11 +108,9 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     const ctx = canvas.getContext("2d")!;
     ctx.globalCompositeOperation = "source-over";
     ctx.clearRect(0, 0, cw, ch);
-    // Nero opaco = mostra la mappa GRIGIA ovunque
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, cw, ch);
 
-    // Ritaglia buchi trasparenti SOLO attorno ai POI sbloccati -> rivela la mappa a COLORI sotto
     ctx.globalCompositeOperation = "destination-out";
 
     const nextRings: ScreenCircle[] = [];
@@ -150,7 +148,6 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     setRings(nextRings);
   };
 
-  // Inizializza i 3 layer Leaflet sincronizzati su tutta Marsala
   useEffect(() => {
     if (
       !colorContainerRef.current ||
@@ -223,12 +220,11 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     };
   }, []);
 
-  // Aggiorna la maschera appena cambiano gli sblocchi
   useEffect(() => {
     updateFogAndSync();
   }, [unlocks]);
 
-  // Marker Pixel-Art 8-Bit dei 20 POI reali di Marsala
+  // Marker Pixel-Art 8-Bit: etichette testuali visibili solo da Z15 in su (o se sei nel raggio GPS)
   useEffect(() => {
     const map = mainMapRef.current;
     if (!map) return;
@@ -248,25 +244,12 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
       const symbol = unlocked ? "★" : inRange ? "!" : "?";
       const symbolColor = unlocked || inRange ? "#000000" : "#ffd166";
       const bounce = inRange && !unlocked ? "pixel-bounce" : "";
+      const shouldShowLabel = showLabels || inRange;
+      const boxSize = shouldShowLabel ? 34 : 26;
+      const fontSize = shouldShowLabel ? 13 : 10;
 
-      const html = `
-        <div class="relative flex flex-col items-center ${bounce}" style="transform: translate(-50%, -50%); cursor: pointer;">
-          <div style="
-            width: 34px;
-            height: 34px;
-            background: ${bg};
-            border: 3px solid ${border};
-            box-shadow: inset 2px 2px 0 rgba(255,255,255,0.4), inset -2px -2px 0 rgba(0,0,0,0.4), 3px 3px 0 #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 13px;
-            color: ${symbolColor};
-          ">
-            ${symbol}
-          </div>
-          <span style="
+      const labelHtml = shouldShowLabel
+        ? `<span style="
             margin-top: 3px;
             background: rgba(11, 14, 26, 0.94);
             color: ${unlocked ? "#ffd166" : inRange ? "#38e54d" : "#e2e8f0"};
@@ -277,7 +260,27 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
             line-height: 1.15;
             white-space: nowrap;
             box-shadow: 2px 2px 0 #000;
-          ">${poi.icon} ${poi.name}</span>
+          ">${poi.icon} ${poi.name}</span>`
+        : "";
+
+      const html = `
+        <div class="relative flex flex-col items-center ${bounce}" style="transform: translate(-50%, -50%); cursor: pointer;">
+          <div style="
+            width: ${boxSize}px;
+            height: ${boxSize}px;
+            background: ${bg};
+            border: 3px solid ${border};
+            box-shadow: inset 2px 2px 0 rgba(255,255,255,0.4), inset -2px -2px 0 rgba(0,0,0,0.4), 3px 3px 0 #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Press Start 2P', monospace;
+            font-size: ${fontSize}px;
+            color: ${symbolColor};
+          ">
+            ${symbol}
+          </div>
+          ${labelHtml}
         </div>
       `;
 
@@ -290,10 +293,11 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
       const existing = poiMarkersRef.current.get(poi.id);
       if (existing) {
         existing.setIcon(icon);
+        existing.setZIndexOffset(inRange ? 650 : unlocked ? 540 : 480);
       } else {
         const marker = L.marker([poi.lat, poi.lng], {
           icon,
-          zIndexOffset: unlocked ? 520 : inRange ? 600 : 480,
+          zIndexOffset: inRange ? 650 : unlocked ? 540 : 480,
         }).addTo(map);
         marker.on("click", () => {
           sound8bit.click();
@@ -302,9 +306,8 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
         poiMarkersRef.current.set(poi.id, marker);
       }
     });
-  }, [unlocks, gps.lat, gps.lng, gps.accuracy, onSelectPoi]);
+  }, [unlocks, gps.lat, gps.lng, gps.accuracy, showLabels, onSelectPoi]);
 
-  // Sprite 8-Bit dell'Esploratore sulla posizione GPS reale
   useEffect(() => {
     const map = mainMapRef.current;
     if (!map || gps.lat === null || gps.lng === null) return;
@@ -366,19 +369,16 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-[#0b0e1a]">
-      {/* LAYER 1: Mappa di Marsala a COLORI (rivelata solo dove la maschera grigia si apre) */}
       <div
         ref={colorContainerRef}
         className="absolute inset-0 z-0 pointer-events-none marsala-color-map"
       />
 
-      {/* LAYER 2: Mappa di Marsala GRIGIA (mascherata dinamicamente via Canvas 2D) */}
       <div
         ref={greyContainerRef}
         className="absolute inset-0 z-10 pointer-events-none marsala-grey-map transition-opacity duration-1000"
       />
 
-      {/* LAYER 3: Bordi dorati 8-bit delle aree colorate + onda sincronizzazione */}
       <svg className="absolute inset-0 w-full h-full z-[15] pointer-events-none">
         {!isMapCompleted &&
           rings.map((c) => (
@@ -407,13 +407,11 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
         )}
       </svg>
 
-      {/* LAYER 4: Mappa interattiva trasparente (drag, zoom, marker 8-bit e GPS) */}
       <div
         ref={mainContainerRef}
         className="absolute inset-0 z-20 marsala-main-map"
       />
 
-      {/* Controlli Zoom & GPS posizionati sopra la Bottom Dock per uso a una mano */}
       <div className="absolute right-2.5 bottom-24 flex flex-col gap-2 z-[600]">
         <button
           onClick={() => {
@@ -448,6 +446,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
               ],
               { padding: [35, 35], animate: false },
             );
+            onFitMarsalaTap();
           }}
           title="Mostra tutta Marsala"
           className="nes-btn w-12 h-12 bg-[#26335c] text-[#38e54d] text-lg flex items-center justify-center"

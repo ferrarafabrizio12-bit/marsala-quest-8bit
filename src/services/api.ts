@@ -71,7 +71,7 @@ export const api = {
     request<{
       unlock: UnlockData;
       easterEggs: string[];
-      newlyUnlockedEgg: string | null;
+      newlyUnlockedEggs: string[];
       totalXp: number;
     }>("/progress/unlock", {
       method: "POST",

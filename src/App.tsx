@@ -2,7 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { EASTER_EGGS, MARSALA_POIS, type PoiDefinition } from "../shared/pois";
 import { api, getStoredToken, setStoredToken } from "./services/api";
 import { useRealGps } from "./hooks/useRealGps";
-import { isStagnoneSunsetHour, useKonamiCode } from "./hooks/useEasterEggs";
+import {
+  isLilibeoNightHour,
+  isStagnoneSunsetHour,
+  useKonamiCode,
+} from "./hooks/useEasterEggs";
 import { sound8bit } from "./utils/sound8bit";
 import { AuthScreen } from "./components/AuthScreen";
 import { MarsalaFogMap } from "./components/MarsalaFogMap";
@@ -40,12 +44,17 @@ export default function App() {
   const [crtEnabled, setCrtEnabled] = useState(true);
   const [muted, setMuted] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
   const [showShips1860, setShowShips1860] = useState(false);
+  const [showPunicShip, setShowPunicShip] = useState(false);
+  const [showStagnoneKites, setShowStagnoneKites] = useState(false);
   const [sibillaDialog, setSibillaDialog] = useState(false);
 
   const titleTapsRef = useRef(0);
   const skyTapsRef = useRef(0);
   const radarTapsRef = useRef(0);
+  const progressTapsRef = useRef(0);
+  const fitMapTapsRef = useRef(0);
 
   const gps = useRealGps(Boolean(user));
   const unlockedCount = Object.keys(unlocks).length;
@@ -109,14 +118,15 @@ export default function App() {
 
   useKonamiCode(activateGameBoy);
 
+  // Controllo automatico Tramonto (18:00-20:30) e Notte di Lilibeo (22:00-05:00)
   useEffect(() => {
-    if (
-      user &&
-      isStagnoneSunsetHour() &&
-      !easterEggs.includes("tramonto-stagnone")
-    ) {
+    if (!user) return;
+    if (isStagnoneSunsetHour() && !easterEggs.includes("tramonto-stagnone")) {
       setTheme("sunset");
       void triggerEasterEgg("tramonto-stagnone");
+    } else if (isLilibeoNightHour() && !easterEggs.includes("notte-lilibeo")) {
+      setTheme("night");
+      void triggerEasterEgg("notte-lilibeo");
     }
   }, [user, easterEggs, triggerEasterEgg]);
 
@@ -150,6 +160,26 @@ export default function App() {
     }
   };
 
+  const handleProgressTap = () => {
+    sound8bit.click();
+    progressTapsRef.current += 1;
+    if (progressTapsRef.current >= 4) {
+      progressTapsRef.current = 0;
+      setTheme((prev) => (prev === "night" ? "default" : "night"));
+      void triggerEasterEgg("notte-lilibeo");
+    }
+  };
+
+  const handleFitMarsalaTap = () => {
+    fitMapTapsRef.current += 1;
+    if (fitMapTapsRef.current >= 5) {
+      fitMapTapsRef.current = 0;
+      setShowStagnoneKites(true);
+      void triggerEasterEgg("vento-stagnone");
+      setTimeout(() => setShowStagnoneKites(false), 6200);
+    }
+  };
+
   const handleRadarTap = () => {
     sound8bit.click();
     if (gps.status !== "LOCKED") {
@@ -169,6 +199,13 @@ export default function App() {
     setShowShips1860(true);
     void triggerEasterEgg("sbarco-1860");
     setTimeout(() => setShowShips1860(false), 6800);
+  };
+
+  const handleTriggerPunic = () => {
+    setShowDex(false);
+    setShowPunicShip(true);
+    void triggerEasterEgg("nave-punica");
+    setTimeout(() => setShowPunicShip(false), 6800);
   };
 
   const handleUnlockSubmit = async (photoDataUrl: string) => {
@@ -192,18 +229,26 @@ export default function App() {
     showToast(`★ ZONA COLORATA: ${selectedPoi.name} (+${selectedPoi.xp} XP)`);
     setTimeout(() => setJustSyncedPoiId(null), 1900);
 
-    if (res.newlyUnlockedEgg === "woodhouse-1773") {
-      setTimeout(() => {
-        sound8bit.easterEgg();
-        showToast("🥂 SEGRETO DI WOODHOUSE 1773 (+250 XP)!");
-      }, 2100);
-    }
+    (res.newlyUnlockedEggs || []).forEach((eggId, idx) => {
+      const def = EASTER_EGGS.find((e) => e.id === eggId);
+      if (def) {
+        setTimeout(
+          () => {
+            sound8bit.easterEgg();
+            showToast(
+              `${def.badge} ${def.title.toUpperCase()} SBLOCCATO (+${def.xp} XP)!`,
+            );
+          },
+          2100 + idx * 2400,
+        );
+      }
+    });
 
     if (Object.keys(nextUnlocks).length >= MARSALA_POIS.length) {
       setTimeout(() => {
         sound8bit.victoryMedal();
         setShowMedal(true);
-      }, 1900);
+      }, 2200);
     }
   };
 
@@ -259,7 +304,9 @@ export default function App() {
       ? "theme-gameboy"
       : theme === "sunset"
         ? "theme-sunset"
-        : "";
+        : theme === "night"
+          ? "theme-night"
+          : "";
 
   return (
     <main
@@ -273,6 +320,7 @@ export default function App() {
         onTitleTap={handleTitleTap}
         onSkyTap={handleSkyTap}
         onRadarTap={handleRadarTap}
+        onProgressTap={handleProgressTap}
       />
 
       <MarsalaFogMap
@@ -280,6 +328,7 @@ export default function App() {
         unlocks={unlocks}
         justSyncedPoiId={justSyncedPoiId}
         onSelectPoi={setSelectedPoi}
+        onFitMarsalaTap={handleFitMarsalaTap}
       />
 
       <BottomDock
@@ -305,6 +354,7 @@ export default function App() {
         </div>
       )}
 
+      {/* Easter Egg 1860: Piroscafi Piemonte e Lombardo */}
       {showShips1860 && (
         <div className="fixed bottom-32 left-0 z-[1150] pointer-events-none ship-sail flex items-center gap-4 nes-box-gold px-3.5 py-2">
           <span className="text-3xl">🚢</span>
@@ -315,6 +365,29 @@ export default function App() {
         </div>
       )}
 
+      {/* Easter Egg 397 a.C.: Nave Punica di Lilibeo */}
+      {showPunicShip && (
+        <div className="fixed top-36 left-0 z-[1150] pointer-events-none punic-sail flex items-center gap-4 nes-box px-3.5 py-2">
+          <span className="text-3xl">⛵</span>
+          <span className="font-pixel text-[9px] text-[#4cc9f0]">
+            397 A.C. • NAVE PUNICA VERSO CAPO BOEO!
+          </span>
+          <span className="text-3xl">🏺</span>
+        </div>
+      )}
+
+      {/* Easter Egg Vento dello Stagnone: Kitesurf */}
+      {showStagnoneKites && (
+        <div className="fixed top-44 left-0 z-[1150] pointer-events-none kite-fly flex items-center gap-3 nes-box-gold px-3.5 py-2">
+          <span className="text-3xl">🪁</span>
+          <span className="font-pixel text-[9px] text-[#38e54d]">
+            MAESTRALE 25 NODI • STAGNONE KITESURF!
+          </span>
+          <span className="text-3xl">🌊</span>
+        </div>
+      )}
+
+      {/* Easter Egg Oracolo della Sibilla */}
       {sibillaDialog && (
         <div className="fixed inset-0 z-[1150] bg-black/85 flex items-center justify-center p-4">
           <div className="nes-box-gold max-w-md p-5 text-center">
@@ -353,6 +426,7 @@ export default function App() {
           easterEggs={easterEggs}
           onSelectPoi={setSelectedPoi}
           onTrigger1860={handleTrigger1860}
+          onTriggerPunic={handleTriggerPunic}
           onClose={() => setShowDex(false)}
         />
       )}

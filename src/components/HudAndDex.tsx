@@ -16,6 +16,7 @@ interface HudBarProps {
   onTitleTap: () => void;
   onSkyTap: () => void;
   onRadarTap: () => void;
+  onProgressTap: () => void;
 }
 
 export const HudBar: React.FC<HudBarProps> = ({
@@ -26,6 +27,7 @@ export const HudBar: React.FC<HudBarProps> = ({
   onTitleTap,
   onSkyTap,
   onRadarTap,
+  onProgressTap,
 }) => {
   const percent = Math.round((unlockedCount / MARSALA_POIS.length) * 100);
   const gpsColor =
@@ -37,8 +39,7 @@ export const HudBar: React.FC<HudBarProps> = ({
 
   return (
     <header className="absolute top-0 left-0 right-0 z-[700] pointer-events-none px-2 safe-top flex flex-col gap-1.5">
-      {/* Riga compatta superiore: max visibilità sulla mappa */}
-      <div className="nes-box pointer-events-auto px-2.5 py-1.5 flex items-center justify-between gap-2">
+      <div className="nes-box pointer-events-auto px-2 py-1.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={onTitleTap}
@@ -60,6 +61,15 @@ export const HudBar: React.FC<HudBarProps> = ({
               </span>
             </div>
           </button>
+
+          {/* Icona Sole per Easter Egg Tramonto dello Stagnone (3 tap) */}
+          <button
+            onClick={onSkyTap}
+            className="nes-btn w-9 h-9 bg-[#26335c] flex items-center justify-center text-base shrink-0"
+            title="Cielo di Marsala"
+          >
+            🌅
+          </button>
         </div>
 
         <button
@@ -76,8 +86,12 @@ export const HudBar: React.FC<HudBarProps> = ({
         </button>
       </div>
 
-      {/* Barra progresso sottile */}
-      <div className="nes-box pointer-events-auto px-2.5 py-1 flex items-center gap-2">
+      {/* Barra progresso (4 tap = Easter Egg Notte di Lilibeo) */}
+      <button
+        type="button"
+        onClick={onProgressTap}
+        className="nes-box pointer-events-auto px-2.5 py-1 flex items-center gap-2 w-full text-left"
+      >
         <span className="font-pixel text-[7px] sm:text-[8px] text-[#ffd166] whitespace-nowrap">
           {unlockedCount}/{MARSALA_POIS.length} ({percent}%)
         </span>
@@ -91,9 +105,8 @@ export const HudBar: React.FC<HudBarProps> = ({
             }}
           />
         </div>
-      </div>
+      </button>
 
-      {/* Banner errore GPS con tasto RIPROVA a portata di dito */}
       {gps.errorMessage && (
         <div className="pointer-events-auto bg-[#4c0519] border-[3px] border-[#ff4d6d] px-2.5 py-1.5 flex items-center justify-between gap-2">
           <span className="text-base sm:text-lg text-[#ffe4e6] leading-tight">
@@ -213,6 +226,7 @@ interface DexModalProps {
   easterEggs: string[];
   onSelectPoi: (poi: PoiDefinition) => void;
   onTrigger1860: () => void;
+  onTriggerPunic: () => void;
   onClose: () => void;
 }
 
@@ -221,6 +235,7 @@ export const DexModal: React.FC<DexModalProps> = ({
   easterEggs,
   onSelectPoi,
   onTrigger1860,
+  onTriggerPunic,
   onClose,
 }) => {
   const [tab, setTab] = useState<"pois" | "eggs">("pois");
@@ -228,7 +243,16 @@ export const DexModal: React.FC<DexModalProps> = ({
 
   const handleQueryChange = (val: string) => {
     setQuery(val);
-    if (val.trim() === "1860") onTrigger1860();
+    const cleaned = val.trim().toLowerCase();
+    if (cleaned === "1860") {
+      onTrigger1860();
+    } else if (
+      cleaned === "397" ||
+      cleaned === "lilibeo" ||
+      cleaned === "lilybaeum"
+    ) {
+      onTriggerPunic();
+    }
   };
 
   const filtered = MARSALA_POIS.filter(

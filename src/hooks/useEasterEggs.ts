@@ -39,3 +39,8 @@ export function isStagnoneSunsetHour(): boolean {
   const mins = now.getHours() * 60 + now.getMinutes();
   return mins >= 18 * 60 && mins <= 20 * 60 + 30;
 }
+
+export function isLilibeoNightHour(): boolean {
+  const h = new Date().getHours();
+  return h >= 22 || h < 5;
+}

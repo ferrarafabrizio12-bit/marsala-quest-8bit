@@ -77,6 +77,7 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
   const allowedRadius =
     poi.unlockRadiusMeters + Math.min(gps.accuracy || 0, 45);
   const isInRange = distance !== null && distance <= allowedRadius;
+  const rarity = poi.rarity ?? 2;
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -183,9 +184,7 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
     ctx.fillStyle = "#ffd166";
     ctx.font = "bold 22px monospace";
     ctx.fillText(
-      "★".repeat(poi.rarity) +
-        "☆".repeat(3 - poi.rarity) +
-        "  MARSALA-DEX CARD",
+      "★".repeat(rarity) + "☆".repeat(3 - rarity) + "  MARSALA-DEX CARD",
       44,
       514,
     );
@@ -262,7 +261,7 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
         <div className="flex items-start justify-between gap-2 border-b-[3px] border-[#2e3d6b] pb-2.5 mb-2.5">
           <div>
             <span className="font-pixel text-[8px] text-[#4cc9f0]">
-              {"★".repeat(poi.rarity)} {poi.zone}
+              {"★".repeat(rarity)} {poi.zone}
             </span>
             <h2 className="font-pixel text-xs text-[#ffd166] mt-1 leading-snug">
               {poi.icon} {poi.name}

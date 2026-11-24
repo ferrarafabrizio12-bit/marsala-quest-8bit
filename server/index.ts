@@ -297,22 +297,31 @@ app.post(
       });
 
       const unlocks = await getUserUnlocks(req.userId!);
+      const newlyUnlockedEggs: string[] = [];
+
       const wineries = [
         "cantine-florio",
         "cantine-pellegrino",
         "cantine-donnafugata",
       ];
-      let newlyUnlockedEgg: string | null = null;
       if (wineries.every((id) => Boolean(unlocks[id]))) {
         const added = await addEasterEgg(req.userId!, "woodhouse-1773");
-        if (added) newlyUnlockedEgg = "woodhouse-1773";
+        if (added) newlyUnlockedEggs.push("woodhouse-1773");
+      }
+
+      const centroIds = MARSALA_POIS.filter(
+        (p) => p.category === "CENTRO_STORICO",
+      ).map((p) => p.id);
+      if (centroIds.every((id) => Boolean(unlocks[id]))) {
+        const added = await addEasterEgg(req.userId!, "custode-cassaro");
+        if (added) newlyUnlockedEggs.push("custode-cassaro");
       }
 
       const easterEggs = await getUserEasterEggs(req.userId!);
       res.json({
         unlock,
         easterEggs,
-        newlyUnlockedEgg,
+        newlyUnlockedEggs,
         totalXp: computeTotalXp(unlocks, easterEggs),
       });
     } catch (err) {

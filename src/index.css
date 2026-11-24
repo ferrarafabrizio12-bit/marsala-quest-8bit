@@ -132,3 +132,43 @@ body {
 .ship-sail {
   animation: sailAcross 6.5s linear forwards;
 }
+
+/* Easter Egg: Notte Neon di Lilibeo */
+.theme-night .marsala-color-map .leaflet-tile-pane {
+  filter: invert(92%) hue-rotate(195deg) saturate(1.9) contrast(1.12);
+}
+
+.theme-night .marsala-grey-map .leaflet-tile-pane {
+  filter: grayscale(100%) invert(88%) contrast(1.25) brightness(0.68);
+}
+
+/* Animazione Kitesurf / Maestrale Stagnone */
+@keyframes kiteDrift {
+  0% {
+    transform: translate(-25vw, 18px) rotate(-8deg);
+  }
+  50% {
+    transform: translate(50vw, -22px) rotate(6deg);
+  }
+  100% {
+    transform: translate(120vw, 10px) rotate(-4deg);
+  }
+}
+
+.kite-fly {
+  animation: kiteDrift 6s ease-in-out forwards;
+}
+
+/* Animazione Nave Punica da destra verso sinistra */
+@keyframes sailReverse {
+  0% {
+    transform: translateX(115vw);
+  }
+  100% {
+    transform: translateX(-40vw);
+  }
+}
+
+.punic-sail {
+  animation: sailReverse 6.5s linear forwards;
+}

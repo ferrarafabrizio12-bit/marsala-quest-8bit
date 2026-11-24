@@ -22,4 +22,4 @@ export interface LeaderboardEntry {
   totalXp: number;
 }
 
-export type RetroTheme = "default" | "gameboy" | "sunset";
+export type RetroTheme = "default" | "gameboy" | "sunset" | "night";
