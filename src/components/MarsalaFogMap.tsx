@@ -17,6 +17,7 @@ interface MarsalaFogMapProps {
   gps: RealGpsState;
   avatar: AvatarConfig;
   dailyBountyPoiId: string;
+  selectedPoi: PoiDefinition | null;
   unlocks: Record<string, UnlockData>;
   justSyncedPoiId: string | null;
   onSelectPoi: (poi: PoiDefinition) => void;
@@ -31,13 +32,17 @@ interface ScreenCircle {
 }
 
 const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-const MIN_ZOOM = 12;
 const MAX_ZOOM = 18;
+const FULL_MARSALA_CENTER: [number, number] = [37.813, 12.465];
+
+const getResponsiveMinZoom = (): number =>
+  typeof window !== 'undefined' && window.innerWidth < 768 ? 11 : 12;
 
 export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   gps,
   avatar,
   dailyBountyPoiId,
+  selectedPoi,
   unlocks,
   justSyncedPoiId,
   onSelectPoi,
@@ -58,6 +63,10 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
 
   const [rings, setRings] = useState<ScreenCircle[]>([]);
   const [zoomLevel, setZoomLevel] = useState<number>(14);
+  const [minZoom, setMinZoom] = useState<number>(() => getResponsiveMinZoom());
+
+  const minZoomRef = useRef<number>(minZoom);
+  minZoomRef.current = minZoom;
 
   const unlocksRef = useRef(unlocks);
   unlocksRef.current = unlocks;
@@ -165,10 +174,13 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
       return;
     }
 
+    const initialMinZoom = getResponsiveMinZoom();
+    minZoomRef.current = initialMinZoom;
+
     const noZoomOpts: L.MapOptions = {
       center: MARSALA_CENTER,
       zoom: 14,
-      minZoom: MIN_ZOOM,
+      minZoom: initialMinZoom,
       maxZoom: MAX_ZOOM,
       zoomControl: false,
       touchZoom: false,
@@ -197,7 +209,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     const mainMap = L.map(mainContainerRef.current, {
       ...noZoomOpts,
       maxBounds: MARSALA_BOUNDS,
-      maxBoundsViscosity: 0.85,
+      maxBoundsViscosity: 1.0,
     });
 
     mainMap.attributionControl.setPrefix('© OpenStreetMap • MARSALA QUEST 8-BIT');
@@ -206,12 +218,49 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     greyMapRef.current = greyMap;
     mainMapRef.current = mainMap;
 
+    // Blocca il trascinamento allo zoom minimo e inquadra l'intera Marsala
+    const applyMinZoomLock = () => {
+      const currentMin = minZoomRef.current;
+      const z = mainMap.getZoom();
+
+      if (z <= currentMin) {
+        mainMap.dragging.disable();
+        const c = mainMap.getCenter();
+        if (
+          Math.abs(c.lat - FULL_MARSALA_CENTER[0]) > 0.0005 ||
+          Math.abs(c.lng - FULL_MARSALA_CENTER[1]) > 0.0005
+        ) {
+          mainMap.setView(FULL_MARSALA_CENTER, currentMin, { animate: false });
+        }
+      } else {
+        mainMap.dragging.enable();
+      }
+      updateFogAndSync();
+    };
+
     const handleSync = () => updateFogAndSync();
-    mainMap.on('move zoom zoomend resize', handleSync);
-    updateFogAndSync();
+    const handleResize = () => {
+      const nextMin = getResponsiveMinZoom();
+      minZoomRef.current = nextMin;
+      setMinZoom(nextMin);
+      mainMap.setMinZoom(nextMin);
+      colorMap.setMinZoom(nextMin);
+      greyMap.setMinZoom(nextMin);
+      if (mainMap.getZoom() < nextMin) {
+        mainMap.setZoom(nextMin, { animate: false });
+      }
+      applyMinZoomLock();
+    };
+
+    mainMap.on('move', handleSync);
+    mainMap.on('zoomend', applyMinZoomLock);
+    mainMap.on('resize', handleResize);
+    applyMinZoomLock();
 
     return () => {
-      mainMap.off('move zoom zoomend resize', handleSync);
+      mainMap.off('move', handleSync);
+      mainMap.off('zoomend', applyMinZoomLock);
+      mainMap.off('resize', handleResize);
       mainMap.remove();
       greyMap.remove();
       colorMap.remove();
@@ -227,6 +276,13 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   useEffect(() => {
     updateFogAndSync();
   }, [unlocks]);
+
+  useEffect(() => {
+    const map = mainMapRef.current;
+    if (!map || !selectedPoi) return;
+    map.dragging.enable();
+    map.setView([selectedPoi.lat, selectedPoi.lng], MAX_ZOOM, { animate: false });
+  }, [selectedPoi]);
 
   useEffect(() => {
     const map = mainMapRef.current;
@@ -320,6 +376,8 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
         }).addTo(map);
         marker.on('click', () => {
           sound8bit.click();
+          map.dragging.enable();
+          map.setView([poi.lat, poi.lng], MAX_ZOOM, { animate: false });
           onSelectPoi(poi);
         });
         poiMarkersRef.current.set(poi.id, marker);
@@ -436,7 +494,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
           Z{zoomLevel}
         </div>
         <button
-          disabled={zoomLevel <= MIN_ZOOM}
+          disabled={zoomLevel <= minZoom}
           onClick={() => {
             sound8bit.click();
             mainMapRef.current?.zoomOut(1, { animate: false });
@@ -449,7 +507,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
         <button
           onClick={() => {
             sound8bit.click();
-            mainMapRef.current?.setView(MARSALA_CENTER, MIN_ZOOM, { animate: false });
+            mainMapRef.current?.setView(FULL_MARSALA_CENTER, minZoom, { animate: false });
             onFitMarsalaTap();
           }}
           title="Mostra tutta Marsala"

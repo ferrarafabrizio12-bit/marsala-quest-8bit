@@ -381,6 +381,7 @@ export default function App() {
         gps={gps}
         avatar={user.avatar}
         dailyBountyPoiId={dailyBounty?.poiId || ''}
+        selectedPoi={selectedPoi}
         unlocks={unlocks}
         justSyncedPoiId={justSyncedPoiId}
         onSelectPoi={setSelectedPoi}

@@ -32,7 +32,7 @@ export interface EasterEggDefinition {
   badge: string;
 }
 
-export const MARSALA_CENTER: [number, number] = [37.7995, 12.434];
+export const MARSALA_CENTER: [number, number] = [37.813, 12.465];
 
 export const MARSALA_BOUNDS: [[number, number], [number, number]] = [
   [37.705, 12.375],
