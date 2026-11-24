@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  height: 100dvh;
+  width: 100%;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: "VT323", monospace;
+  background-color: #0b0e1a;
+  color: #f4f1de;
+  image-rendering: pixelated;
+}
+
+.safe-top {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
+.safe-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.nes-box {
+  background: #141b33;
+  border: 3px solid #f4f1de;
+  box-shadow:
+    inset 0 0 0 2px #2e3d6b,
+    4px 4px 0px #000000;
+}
+
+.nes-box-gold {
+  background: #1a1528;
+  border: 3px solid #ffd166;
+  box-shadow:
+    inset 0 0 0 2px #8a5a00,
+    4px 4px 0px #000000;
+}
+
+.nes-btn {
+  font-family: "Press Start 2P", monospace;
+  border: 3px solid #000000;
+  box-shadow:
+    inset 2px 2px 0px rgba(255, 255, 255, 0.35),
+    inset -2px -2px 0px rgba(0, 0, 0, 0.4),
+    3px 3px 0px #000000;
+  transition: transform 0.06s steps(2);
+  touch-action: manipulation;
+}
+
+.nes-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow:
+    inset 2px 2px 0px rgba(0, 0, 0, 0.35),
+    1px 1px 0px #000000;
+}
+
+.marsala-main-map.leaflet-container {
+  background: transparent !important;
+}
+
+.marsala-color-map .leaflet-tile-pane {
+  filter: saturate(1.6) contrast(1.1) brightness(1.03);
+}
+
+.marsala-grey-map .leaflet-tile-pane {
+  filter: grayscale(100%) contrast(1.18) brightness(0.72);
+}
+
+.crt-scanlines {
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.16) 0px,
+    rgba(0, 0, 0, 0.16) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+.theme-gameboy {
+  filter: sepia(100%) hue-rotate(48deg) saturate(260%) contrast(1.16) !important;
+}
+
+.theme-sunset .marsala-color-map .leaflet-tile-pane {
+  filter: sepia(28%) hue-rotate(-22deg) saturate(1.85) contrast(1.12);
+}
+
+@keyframes pixelBounce {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) translateY(0px);
+  }
+  50% {
+    transform: translate(-50%, -50%) translateY(-6px);
+  }
+}
+
+.pixel-bounce {
+  animation: pixelBounce 0.75s steps(3) infinite;
+}
+
+@keyframes syncWave {
+  0% {
+    transform: scale(0.25);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.sync-shockwave {
+  animation: syncWave 1.5s ease-out forwards;
+}
+
+@keyframes sailAcross {
+  0% {
+    transform: translateX(-30vw);
+  }
+  100% {
+    transform: translateX(120vw);
+  }
+}
+
+.ship-sail {
+  animation: sailAcross 6.5s linear forwards;
+}
