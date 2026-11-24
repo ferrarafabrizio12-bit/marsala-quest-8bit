@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT NOT NULL UNIQUE,
   nickname TEXT NOT NULL,
   password_hash TEXT NOT NULL,
+  avatar_config JSONB NOT NULL DEFAULT '{"gender":"male","hat":"hat-cap-red","glasses":"glasses-none","top":"top-explorer","bottom":"bottom-jeans"}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

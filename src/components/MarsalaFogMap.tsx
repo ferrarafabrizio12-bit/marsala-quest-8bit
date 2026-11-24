@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
+import type { AvatarConfig } from '../../shared/cosmetics';
+import { renderAvatarSvgString } from '../utils/avatarPixels';
 import L from "leaflet";
 import {
   MARSALA_BOUNDS,
@@ -13,6 +15,7 @@ import { sound8bit } from "../utils/sound8bit";
 
 interface MarsalaFogMapProps {
   gps: RealGpsState;
+  avatar: AvatarConfig;
   unlocks: Record<string, UnlockData>;
   justSyncedPoiId: string | null;
   onSelectPoi: (poi: PoiDefinition) => void;
@@ -30,6 +33,7 @@ const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   gps,
+  avatar,
   unlocks,
   justSyncedPoiId,
   onSelectPoi,
@@ -309,59 +313,53 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   }, [unlocks, gps.lat, gps.lng, gps.accuracy, showLabels, onSelectPoi]);
 
   useEffect(() => {
-    const map = mainMapRef.current;
-    if (!map || gps.lat === null || gps.lng === null) return;
+  const map = mainMapRef.current;
+  if (!map || gps.lat === null || gps.lng === null) return;
 
-    const playerIcon = L.divIcon({
-      className: "bg-transparent border-0",
-      html: `
-        <div style="transform: translate(-50%, -50%);" class="flex flex-col items-center">
-          <svg width="30" height="34" viewBox="0 0 12 14" style="image-rendering: pixelated; filter: drop-shadow(2px 2px 0 #000);">
-            <rect x="3" y="0" width="6" height="2" fill="#ff4d6d"/>
-            <rect x="2" y="2" width="8" height="2" fill="#ff4d6d"/>
-            <rect x="3" y="4" width="6" height="3" fill="#ffcdb2"/>
-            <rect x="4" y="5" width="1" height="1" fill="#000"/>
-            <rect x="7" y="5" width="1" height="1" fill="#000"/>
-            <rect x="2" y="7" width="8" height="4" fill="#4cc9f0"/>
-            <rect x="3" y="11" width="2" height="3" fill="#1e293b"/>
-            <rect x="7" y="11" width="2" height="3" fill="#1e293b"/>
-          </svg>
-          <span style="
-            background: #4cc9f0;
-            color: #000;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 7px;
-            padding: 1px 4px;
-            border: 2px solid #000;
-          ">TU</span>
-        </div>
-      `,
-      iconSize: [0, 0],
-    });
+  const avatarSvg = renderAvatarSvgString(avatar, 34, 42);
+  const playerIcon = L.divIcon({
+    className: 'bg-transparent border-0',
+    html: `
+      <div style="transform: translate(-50%, -62%);" class="flex flex-col items-center">
+        ${avatarSvg}
+        <span style="
+          margin-top: -2px;
+          background: #4cc9f0;
+          color: #000;
+          font-family: 'Press Start 2P', monospace;
+          font-size: 7px;
+          padding: 1px 4px;
+          border: 2px solid #000;
+        ">TU</span>
+      </div>
+    `,
+    iconSize: [0, 0],
+  });
 
-    if (!playerMarkerRef.current) {
-      playerMarkerRef.current = L.marker([gps.lat, gps.lng], {
-        icon: playerIcon,
-        zIndexOffset: 900,
-      }).addTo(map);
-    } else {
-      playerMarkerRef.current.setLatLng([gps.lat, gps.lng]);
-    }
+  if (!playerMarkerRef.current) {
+    playerMarkerRef.current = L.marker([gps.lat, gps.lng], {
+      icon: playerIcon,
+      zIndexOffset: 900,
+    }).addTo(map);
+  } else {
+    playerMarkerRef.current.setLatLng([gps.lat, gps.lng]);
+    playerMarkerRef.current.setIcon(playerIcon);
+  }
 
-    if (!accuracyCircleRef.current) {
-      accuracyCircleRef.current = L.circle([gps.lat, gps.lng], {
-        radius: gps.accuracy || 20,
-        color: "#4cc9f0",
-        fillColor: "#4cc9f0",
-        fillOpacity: 0.16,
-        weight: 2,
-        dashArray: "4 4",
-      }).addTo(map);
-    } else {
-      accuracyCircleRef.current.setLatLng([gps.lat, gps.lng]);
-      accuracyCircleRef.current.setRadius(gps.accuracy || 20);
-    }
-  }, [gps.lat, gps.lng, gps.accuracy]);
+  if (!accuracyCircleRef.current) {
+    accuracyCircleRef.current = L.circle([gps.lat, gps.lng], {
+      radius: gps.accuracy || 20,
+      color: '#4cc9f0',
+      fillColor: '#4cc9f0',
+      fillOpacity: 0.16,
+      weight: 2,
+      dashArray: '4 4',
+    }).addTo(map);
+  } else {
+    accuracyCircleRef.current.setLatLng([gps.lat, gps.lng]);
+    accuracyCircleRef.current.setRadius(gps.accuracy || 20);
+  }
+}, [gps.lat, gps.lng, gps.accuracy, avatar]);
 
   const syncedRing = justSyncedPoiId
     ? rings.find((r) => r.id === justSyncedPoiId)

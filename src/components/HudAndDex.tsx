@@ -7,6 +7,7 @@ import {
 import type { RealGpsState } from "../hooks/useRealGps";
 import type { LeaderboardEntry, UnlockData, UserProfile } from "../types/game";
 import { sound8bit } from "../utils/sound8bit";
+import { PixelAvatar } from './PixelAvatar';
 
 interface HudBarProps {
   user: UserProfile;
@@ -133,6 +134,7 @@ interface BottomDockProps {
   crtEnabled: boolean;
   muted: boolean;
   onOpenDex: () => void;
+  onOpenWardrobe: () => void;
   onOpenLeaderboard: () => void;
   onOpenMedal: () => void;
   onToggleCrt: () => void;
@@ -146,13 +148,14 @@ export const BottomDock: React.FC<BottomDockProps> = ({
   crtEnabled,
   muted,
   onOpenDex,
+  onOpenWardrobe,
   onOpenLeaderboard,
   onOpenMedal,
   onToggleCrt,
   onToggleMute,
   onLogout,
 }) => (
-  <nav className="fixed bottom-0 left-0 right-0 z-[700] pointer-events-none px-2 safe-bottom">
+  <nav className="fixed bottom-0 left-0 right-0 z-[700] pointer-events-none px-1.5 safe-bottom">
     <div className="max-w-xl mx-auto pointer-events-auto flex flex-col gap-2">
       {isCompleted && (
         <button
@@ -166,7 +169,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
         </button>
       )}
 
-      <div className="nes-box p-1.5 grid grid-cols-5 gap-1.5">
+      <div className="nes-box p-1 grid grid-cols-6 gap-1">
         <button
           onClick={() => {
             sound8bit.click();
@@ -174,8 +177,19 @@ export const BottomDock: React.FC<BottomDockProps> = ({
           }}
           className="nes-btn min-h-[48px] bg-[#ffd166] text-black flex flex-col items-center justify-center gap-0.5"
         >
-          <span className="text-base leading-none">📖</span>
-          <span className="text-[7px]">DEX {unlockedCount}</span>
+          <span className="text-sm leading-none">📖</span>
+          <span className="text-[6px]">DEX {unlockedCount}</span>
+        </button>
+
+        <button
+          onClick={() => {
+            sound8bit.click();
+            onOpenWardrobe();
+          }}
+          className="nes-btn min-h-[48px] bg-[#a855f7] text-white flex flex-col items-center justify-center gap-0.5"
+        >
+          <span className="text-sm leading-none">👕</span>
+          <span className="text-[6px]">LOOK</span>
         </button>
 
         <button
@@ -185,36 +199,34 @@ export const BottomDock: React.FC<BottomDockProps> = ({
           }}
           className="nes-btn min-h-[48px] bg-[#4cc9f0] text-black flex flex-col items-center justify-center gap-0.5"
         >
-          <span className="text-base leading-none">🏆</span>
-          <span className="text-[7px]">TOP</span>
+          <span className="text-sm leading-none">🏆</span>
+          <span className="text-[6px]">TOP</span>
         </button>
 
         <button
           onClick={onToggleMute}
           className="nes-btn min-h-[48px] bg-[#26335c] text-white flex flex-col items-center justify-center gap-0.5"
         >
-          <span className="text-base leading-none">{muted ? "🔇" : "🔊"}</span>
-          <span className="text-[7px]">AUDIO</span>
+          <span className="text-sm leading-none">{muted ? '🔇' : '🔊'}</span>
+          <span className="text-[6px]">AUDIO</span>
         </button>
 
         <button
           onClick={onToggleCrt}
           className={`nes-btn min-h-[48px] flex flex-col items-center justify-center gap-0.5 ${
-            crtEnabled
-              ? "bg-[#38e54d] text-black"
-              : "bg-[#26335c] text-slate-300"
+            crtEnabled ? 'bg-[#38e54d] text-black' : 'bg-[#26335c] text-slate-300'
           }`}
         >
-          <span className="text-base leading-none">📺</span>
-          <span className="text-[7px]">CRT</span>
+          <span className="text-sm leading-none">📺</span>
+          <span className="text-[6px]">CRT</span>
         </button>
 
         <button
           onClick={onLogout}
           className="nes-btn min-h-[48px] bg-[#ff4d6d] text-white flex flex-col items-center justify-center gap-0.5"
         >
-          <span className="text-base leading-none">🚪</span>
-          <span className="text-[7px]">EXIT</span>
+          <span className="text-sm leading-none">🚪</span>
+          <span className="text-[6px]">EXIT</span>
         </button>
       </div>
     </div>
@@ -398,15 +410,12 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
   onClose,
 }) => (
   <div className="fixed inset-0 z-[1000] bg-black/85 flex items-end sm:items-center justify-center sm:p-3">
-    <div className="nes-box-gold w-full sm:max-w-lg max-h-[80dvh] flex flex-col p-4 safe-bottom">
+    <div className="nes-box-gold w-full sm:max-w-lg max-h-[82dvh] flex flex-col p-4 safe-bottom">
       <div className="flex justify-between items-center border-b-[3px] border-[#2e3d6b] pb-3 mb-3">
         <h3 className="font-pixel text-[10px] sm:text-xs text-[#ffd166]">
           🏆 HIGH SCORES • LILIBEO
         </h3>
-        <button
-          onClick={onClose}
-          className="nes-btn w-10 h-10 bg-[#ff4d6d] text-white text-[10px]"
-        >
+        <button onClick={onClose} className="nes-btn w-10 h-10 bg-[#ff4d6d] text-white text-[10px]">
           X
         </button>
       </div>
@@ -414,24 +423,25 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
         {entries.map((e, i) => (
           <div
             key={e.nickname}
-            className={`flex items-center justify-between p-2.5 border-[3px] text-xl ${
+            className={`flex items-center justify-between p-2 border-[3px] text-xl gap-2 ${
               e.nickname === currentNickname
-                ? "border-[#ffd166] bg-[#2c2142]"
-                : "border-[#2e3d6b] bg-[#0d1324]"
+                ? 'border-[#ffd166] bg-[#2c2142]'
+                : 'border-[#2e3d6b] bg-[#0d1324]'
             }`}
           >
-            <div className="truncate pr-2">
-              <span className="font-pixel text-[9px] text-[#4cc9f0] mr-2">
-                #{i + 1}
-              </span>
-              <span className="font-bold">{e.nickname}</span>
-              <span className="text-[#94a3b8] text-base ml-1.5">
-                ({e.percent}%)
-              </span>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="font-pixel text-[9px] text-[#4cc9f0] shrink-0">#{i + 1}</span>
+              <div className="w-9 h-11 bg-[#141b33] border-2 border-black flex items-center justify-center shrink-0">
+                <PixelAvatar avatar={e.avatar} size={26} />
+              </div>
+              <div className="min-w-0">
+                <span className="font-bold block truncate leading-none">{e.nickname}</span>
+                <span className="text-[#94a3b8] text-base leading-none">
+                  {e.unlockedCount} card ({e.percent}%)
+                </span>
+              </div>
             </div>
-            <span className="font-pixel text-[9px] text-[#38e54d] shrink-0">
-              {e.totalXp} XP
-            </span>
+            <span className="font-pixel text-[9px] text-[#38e54d] shrink-0">{e.totalXp} XP</span>
           </div>
         ))}
       </div>

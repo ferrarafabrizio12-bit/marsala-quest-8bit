@@ -1,29 +1,21 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { EASTER_EGGS, MARSALA_POIS, type PoiDefinition } from "../shared/pois";
-import { api, getStoredToken, setStoredToken } from "./services/api";
-import { useRealGps } from "./hooks/useRealGps";
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { EASTER_EGGS, MARSALA_POIS, type PoiDefinition } from '../shared/pois';
+import { type AvatarConfig, COSMETICS_CATALOG } from '../shared/cosmetics';
+import { api, getStoredToken, setStoredToken } from './services/api';
+import { useRealGps } from './hooks/useRealGps';
 import {
   isLilibeoNightHour,
   isStagnoneSunsetHour,
   useKonamiCode,
-} from "./hooks/useEasterEggs";
-import { sound8bit } from "./utils/sound8bit";
-import { AuthScreen } from "./components/AuthScreen";
-import { MarsalaFogMap } from "./components/MarsalaFogMap";
-import { CameraCardModal } from "./components/CameraCardModal";
-import { LilibeoMedalModal } from "./components/LilibeoMedalModal";
-import {
-  BottomDock,
-  DexModal,
-  HudBar,
-  LeaderboardModal,
-} from "./components/HudAndDex";
-import type {
-  LeaderboardEntry,
-  RetroTheme,
-  UnlockData,
-  UserProfile,
-} from "./types/game";
+} from './hooks/useEasterEggs';
+import { sound8bit } from './utils/sound8bit';
+import { AuthScreen } from './components/AuthScreen';
+import { MarsalaFogMap } from './components/MarsalaFogMap';
+import { CameraCardModal } from './components/CameraCardModal';
+import { LilibeoMedalModal } from './components/LilibeoMedalModal';
+import { AvatarWardrobeModal } from './components/AvatarWardrobeModal';
+import { BottomDock, DexModal, HudBar, LeaderboardModal } from './components/HudAndDex';
+import type { LeaderboardEntry, RetroTheme, UnlockData, UserProfile } from './types/game';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -36,11 +28,12 @@ export default function App() {
   const [selectedPoi, setSelectedPoi] = useState<PoiDefinition | null>(null);
   const [justSyncedPoiId, setJustSyncedPoiId] = useState<string | null>(null);
   const [showDex, setShowDex] = useState(false);
+  const [showWardrobe, setShowWardrobe] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [showMedal, setShowMedal] = useState(false);
 
-  const [theme, setTheme] = useState<RetroTheme>("default");
+  const [theme, setTheme] = useState<RetroTheme>('default');
   const [crtEnabled, setCrtEnabled] = useState(true);
   const [muted, setMuted] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -98,35 +91,41 @@ export default function App() {
         setTotalXp(res.totalXp);
         const def = EASTER_EGGS.find((e) => e.id === eggId);
         if (def) {
+          const rewardItems = COSMETICS_CATALOG.filter(
+            (c) => c.requirement.type === 'easter_egg' && c.requirement.eggId === eggId
+          );
+          const rewardSuffix =
+            res.isNew && rewardItems.length > 0
+              ? ` • 👕 Sbloccato in LOOK: ${rewardItems.map((r) => r.name).join(' + ')}!`
+              : '';
           showToast(
             res.isNew
-              ? `🎉 SEGRETO: ${def.badge} ${def.title} (+${def.xp} XP)!`
-              : `${def.badge} ${def.title} attivo!`,
+              ? `🎉 SEGRETO: ${def.badge} ${def.title} (+${def.xp} XP)${rewardSuffix}`
+              : `${def.badge} ${def.title} attivo!`
           );
         }
       } catch {
         // Ignora se offline
       }
     },
-    [user, showToast],
+    [user, showToast]
   );
 
   const activateGameBoy = useCallback(() => {
-    setTheme((prev) => (prev === "gameboy" ? "default" : "gameboy"));
-    void triggerEasterEgg("konami-gameboy");
+    setTheme((prev) => (prev === 'gameboy' ? 'default' : 'gameboy'));
+    void triggerEasterEgg('konami-gameboy');
   }, [triggerEasterEgg]);
 
   useKonamiCode(activateGameBoy);
 
-  // Controllo automatico Tramonto (18:00-20:30) e Notte di Lilibeo (22:00-05:00)
   useEffect(() => {
     if (!user) return;
-    if (isStagnoneSunsetHour() && !easterEggs.includes("tramonto-stagnone")) {
-      setTheme("sunset");
-      void triggerEasterEgg("tramonto-stagnone");
-    } else if (isLilibeoNightHour() && !easterEggs.includes("notte-lilibeo")) {
-      setTheme("night");
-      void triggerEasterEgg("notte-lilibeo");
+    if (isStagnoneSunsetHour() && !easterEggs.includes('tramonto-stagnone')) {
+      setTheme('sunset');
+      void triggerEasterEgg('tramonto-stagnone');
+    } else if (isLilibeoNightHour() && !easterEggs.includes('notte-lilibeo')) {
+      setTheme('night');
+      void triggerEasterEgg('notte-lilibeo');
     }
   }, [user, easterEggs, triggerEasterEgg]);
 
@@ -155,8 +154,8 @@ export default function App() {
     skyTapsRef.current += 1;
     if (skyTapsRef.current >= 3) {
       skyTapsRef.current = 0;
-      setTheme((prev) => (prev === "sunset" ? "default" : "sunset"));
-      void triggerEasterEgg("tramonto-stagnone");
+      setTheme((prev) => (prev === 'sunset' ? 'default' : 'sunset'));
+      void triggerEasterEgg('tramonto-stagnone');
     }
   };
 
@@ -165,8 +164,8 @@ export default function App() {
     progressTapsRef.current += 1;
     if (progressTapsRef.current >= 4) {
       progressTapsRef.current = 0;
-      setTheme((prev) => (prev === "night" ? "default" : "night"));
-      void triggerEasterEgg("notte-lilibeo");
+      setTheme((prev) => (prev === 'night' ? 'default' : 'night'));
+      void triggerEasterEgg('notte-lilibeo');
     }
   };
 
@@ -175,14 +174,14 @@ export default function App() {
     if (fitMapTapsRef.current >= 5) {
       fitMapTapsRef.current = 0;
       setShowStagnoneKites(true);
-      void triggerEasterEgg("vento-stagnone");
+      void triggerEasterEgg('vento-stagnone');
       setTimeout(() => setShowStagnoneKites(false), 6200);
     }
   };
 
   const handleRadarTap = () => {
     sound8bit.click();
-    if (gps.status !== "LOCKED") {
+    if (gps.status !== 'LOCKED') {
       gps.retry();
       return;
     }
@@ -190,26 +189,33 @@ export default function App() {
     if (radarTapsRef.current >= 5) {
       radarTapsRef.current = 0;
       setSibillaDialog(true);
-      void triggerEasterEgg("oracolo-sibilla");
+      void triggerEasterEgg('oracolo-sibilla');
     }
   };
 
   const handleTrigger1860 = () => {
     setShowDex(false);
     setShowShips1860(true);
-    void triggerEasterEgg("sbarco-1860");
+    void triggerEasterEgg('sbarco-1860');
     setTimeout(() => setShowShips1860(false), 6800);
   };
 
   const handleTriggerPunic = () => {
     setShowDex(false);
     setShowPunicShip(true);
-    void triggerEasterEgg("nave-punica");
+    void triggerEasterEgg('nave-punica');
     setTimeout(() => setShowPunicShip(false), 6800);
+  };
+
+  const handleSaveAvatar = async (nextAvatar: AvatarConfig) => {
+    const res = await api.updateAvatar(nextAvatar);
+    setUser((prev) => (prev ? { ...prev, avatar: res.avatar } : prev));
+    showToast('👕 Nuovo look salvato su mappa e classifica!');
   };
 
   const handleUnlockSubmit = async (photoDataUrl: string) => {
     if (!selectedPoi || gps.lat === null || gps.lng === null) return;
+    const prevCount = Object.keys(unlocks).length;
     const res = await api.unlockPoi({
       poiId: selectedPoi.id,
       lat: gps.lat,
@@ -219,6 +225,7 @@ export default function App() {
     });
 
     const nextUnlocks = { ...unlocks, [selectedPoi.id]: res.unlock };
+    const nextCount = Object.keys(nextUnlocks).length;
     setUnlocks(nextUnlocks);
     setEasterEggs(res.easterEggs);
     setTotalXp(res.totalXp);
@@ -226,25 +233,32 @@ export default function App() {
 
     sound8bit.syncViewpoint();
     setJustSyncedPoiId(selectedPoi.id);
-    showToast(`★ ZONA COLORATA: ${selectedPoi.name} (+${selectedPoi.xp} XP)`);
+
+    const cardCosmetic =
+      nextCount > prevCount
+        ? COSMETICS_CATALOG.find(
+            (c) => c.requirement.type === 'cards' && c.requirement.count === nextCount
+          )
+        : undefined;
+
+    showToast(
+      cardCosmetic
+        ? `★ ZONA COLORATA: ${selectedPoi.name} • 👕 Sbloccato: ${cardCosmetic.name}!`
+        : `★ ZONA COLORATA: ${selectedPoi.name} (+${selectedPoi.xp} XP)`
+    );
     setTimeout(() => setJustSyncedPoiId(null), 1900);
 
     (res.newlyUnlockedEggs || []).forEach((eggId, idx) => {
       const def = EASTER_EGGS.find((e) => e.id === eggId);
       if (def) {
-        setTimeout(
-          () => {
-            sound8bit.easterEgg();
-            showToast(
-              `${def.badge} ${def.title.toUpperCase()} SBLOCCATO (+${def.xp} XP)!`,
-            );
-          },
-          2100 + idx * 2400,
-        );
+        setTimeout(() => {
+          sound8bit.easterEgg();
+          showToast(`${def.badge} ${def.title.toUpperCase()} (+${def.xp} XP) • 👕 Nuovo capo!`);
+        }, 2100 + idx * 2400);
       }
     });
 
-    if (Object.keys(nextUnlocks).length >= MARSALA_POIS.length) {
+    if (nextCount >= MARSALA_POIS.length) {
       setTimeout(() => {
         sound8bit.victoryMedal();
         setShowMedal(true);
@@ -258,7 +272,7 @@ export default function App() {
       setLeaderboard(data.leaderboard);
       setShowLeaderboard(true);
     } catch {
-      showToast("Impossibile caricare gli High Scores.");
+      showToast('Impossibile caricare gli High Scores.');
     }
   };
 
@@ -269,19 +283,16 @@ export default function App() {
     setUnlocks({});
     setEasterEggs([]);
     setTotalXp(0);
-    setTheme("default");
+    setTheme('default');
   };
 
   if (booting) {
     return (
       <div className="h-[100dvh] w-screen flex flex-col items-center justify-center p-6 text-center bg-[#0b0e1a] gap-3">
-        <p className="font-pixel text-xs text-[#ffd166]">
-          CARICAMENTO LILIBEO...
-        </p>
+        <p className="font-pixel text-xs text-[#ffd166]">CARICAMENTO LILIBEO...</p>
         {slowBoot && (
           <p className="text-xl text-[#4cc9f0] max-w-xs">
-            Risveglio del server in corso (al primo accesso su Render può
-            impiegare 20–30 secondi).
+            Risveglio del server in corso (al primo accesso su Render può impiegare 20–30 secondi).
           </p>
         )}
       </div>
@@ -300,18 +311,16 @@ export default function App() {
   }
 
   const themeClass =
-    theme === "gameboy"
-      ? "theme-gameboy"
-      : theme === "sunset"
-        ? "theme-sunset"
-        : theme === "night"
-          ? "theme-night"
-          : "";
+    theme === 'gameboy'
+      ? 'theme-gameboy'
+      : theme === 'sunset'
+        ? 'theme-sunset'
+        : theme === 'night'
+          ? 'theme-night'
+          : '';
 
   return (
-    <main
-      className={`relative w-screen h-[100dvh] overflow-hidden ${themeClass}`}
-    >
+    <main className={`relative w-screen h-[100dvh] overflow-hidden ${themeClass}`}>
       <HudBar
         user={user}
         unlockedCount={unlockedCount}
@@ -325,6 +334,7 @@ export default function App() {
 
       <MarsalaFogMap
         gps={gps}
+        avatar={user.avatar}
         unlocks={unlocks}
         justSyncedPoiId={justSyncedPoiId}
         onSelectPoi={setSelectedPoi}
@@ -337,6 +347,7 @@ export default function App() {
         crtEnabled={crtEnabled}
         muted={muted}
         onOpenDex={() => setShowDex(true)}
+        onOpenWardrobe={() => setShowWardrobe(true)}
         onOpenLeaderboard={() => void handleOpenLeaderboard()}
         onOpenMedal={() => setShowMedal(true)}
         onToggleCrt={handleToggleCrt}
@@ -354,7 +365,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Easter Egg 1860: Piroscafi Piemonte e Lombardo */}
       {showShips1860 && (
         <div className="fixed bottom-32 left-0 z-[1150] pointer-events-none ship-sail flex items-center gap-4 nes-box-gold px-3.5 py-2">
           <span className="text-3xl">🚢</span>
@@ -365,7 +375,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Easter Egg 397 a.C.: Nave Punica di Lilibeo */}
       {showPunicShip && (
         <div className="fixed top-36 left-0 z-[1150] pointer-events-none punic-sail flex items-center gap-4 nes-box px-3.5 py-2">
           <span className="text-3xl">⛵</span>
@@ -376,7 +385,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Easter Egg Vento dello Stagnone: Kitesurf */}
       {showStagnoneKites && (
         <div className="fixed top-44 left-0 z-[1150] pointer-events-none kite-fly flex items-center gap-3 nes-box-gold px-3.5 py-2">
           <span className="text-3xl">🪁</span>
@@ -387,7 +395,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Easter Egg Oracolo della Sibilla */}
       {sibillaDialog && (
         <div className="fixed inset-0 z-[1150] bg-black/85 flex items-center justify-center p-4">
           <div className="nes-box-gold max-w-md p-5 text-center">
@@ -396,8 +403,8 @@ export default function App() {
               ORACOLO DELLA SIBILLA LILIBETANA
             </h3>
             <p className="text-2xl text-[#f4f1de] mb-4 leading-snug">
-              &laquo;Chi percorre Capo Boeo fino alle acque rosa dello Stagnone
-              risveglierà tutti i colori di Lilibeo, {user.nickname}.&raquo;
+              &laquo;Chi percorre Capo Boeo fino alle acque rosa dello Stagnone risveglierà tutti i
+              colori di Lilibeo, {user.nickname}.&raquo;
             </p>
             <button
               onClick={() => setSibillaDialog(false)}
@@ -417,6 +424,17 @@ export default function App() {
           existingUnlock={unlocks[selectedPoi.id]}
           onClose={() => setSelectedPoi(null)}
           onSubmitUnlock={handleUnlockSubmit}
+        />
+      )}
+
+      {showWardrobe && (
+        <AvatarWardrobeModal
+          avatar={user.avatar}
+          nickname={user.nickname}
+          unlockedCardsCount={unlockedCount}
+          easterEggs={easterEggs}
+          onSave={handleSaveAvatar}
+          onClose={() => setShowWardrobe(false)}
         />
       )}
 
