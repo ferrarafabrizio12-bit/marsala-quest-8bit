@@ -101,7 +101,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="es. fabrizio_tp"
+              placeholder="es. JacoMangiaCaitta"
               className="w-full bg-[#090d18] border-[3px] border-[#4cc9f0] px-3 py-2 text-2xl text-white focus:border-[#ffd166] outline-none"
             />
           </div>
@@ -118,7 +118,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                   maxLength={20}
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
-                  placeholder="es. ReDiLilibeo"
+                  placeholder="es. uPatruneRiMaissala"
                   className="w-full bg-[#090d18] border-[3px] border-[#38e54d] px-3 py-2 text-2xl text-white focus:border-[#ffd166] outline-none"
                 />
               </div>
