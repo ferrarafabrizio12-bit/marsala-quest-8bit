@@ -60,7 +60,6 @@ export const HudBar: React.FC<HudBarProps> = ({
               </span>
             </div>
           </button>
-          ...
         </div>
 
         <button
