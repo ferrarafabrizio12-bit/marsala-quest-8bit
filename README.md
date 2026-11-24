@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/logo.png" alt="Marsala Quest 8-Bit Logo" width="140" />
+  <img src="public/Marsala-Quest-8bit-ico.png" alt="Marsala Quest 8-Bit Logo" width="140" />
 </p>
 
 # 🕹️ MARSALA QUEST 8-BIT — Cronache di Lilibeo
