@@ -57,8 +57,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
             </span>
           </h1>
           <p className="text-xl text-[#c7d2fe] mt-3 leading-tight">
-            Mappa interattiva, 20 punti di interesse di Marsala, foto-card retro
-            e Medaglia di Lilibeo!
+            Mappa interattiva con i maggiori punti di interesse di Marsala,
+            foto-card retro e Medaglia di Lilibeo!
           </p>
         </div>
 
