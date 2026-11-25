@@ -56,6 +56,21 @@ export const HudBar: React.FC<HudBarProps> = ({
 
   return (
     <header className="absolute top-0 left-0 right-0 z-[700] pointer-events-none px-2 safe-top flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className="font-pixel text-[9px] sm:text-[11px] text-[#ffd166] truncate">
+          {user.nickname}
+        </span>
+        {user.isSuperuser && (
+          <span className="bg-[#dc2626] border border-[#ffd166] px-1 font-pixel text-[7px] text-white shrink-0">
+            ⚡SU
+          </span>
+        )}
+        {user.prestige > 0 && (
+          <span className="bg-[#a21caf] border border-[#f0abfc] px-1 font-pixel text-[7px] text-white shrink-0">
+            ★P{user.prestige}
+          </span>
+        )}
+      </div>
       <div className="nes-box pointer-events-auto px-2 py-1.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <button
@@ -217,8 +232,8 @@ export const BottomDock: React.FC<BottomDockProps> = ({
   onToggleMute,
   onLogout,
 }) => (
-  <nav className="fixed bottom-0 left-0 right-0 z-[700] pointer-events-none px-1.5 safe-bottom">
-    <div className="max-w-xl mx-auto pointer-events-auto flex flex-col gap-1.5">
+  <nav className="fixed bottom-0 left-0 right-0 z-[700] pointer-events-none px-2 safe-bottom">
+    <div className="w-full max-w-xl mx-auto pointer-events-auto flex flex-col gap-1.5">
       {topSlot}
 
       {(isCompleted || prestige > 0) && (
@@ -247,7 +262,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
         </div>
       )}
 
-      <div className="nes-box p-1 grid grid-cols-6 gap-1">
+      <div className="nes-box w-full box-border py-1.5 pl-1.5 pr-[9px] grid grid-cols-6 gap-1.5">
         <button
           onClick={() => {
             sound8bit.click();

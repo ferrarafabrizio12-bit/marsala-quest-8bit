@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  type CardEdition,
   type PoiDefinition,
   getCurrentCardEdition,
   getEffectiveUnlockRadius,
@@ -7,11 +8,13 @@ import {
 } from "../../shared/pois";
 import type { RealGpsState } from "../hooks/useRealGps";
 import type { RetroTheme, UnlockData } from "../types/game";
+import { shareOrSaveDataUrl } from "../utils/shareImage";
 import { sound8bit } from "../utils/sound8bit";
 
 interface CameraCardModalProps {
   poi: PoiDefinition;
   nickname: string;
+  isSuperuser?: boolean;
   prestige: number;
   theme: RetroTheme;
   isDailyBounty: boolean;
@@ -24,9 +27,216 @@ interface CameraCardModalProps {
   onSubmitUnlock: (photoDataUrl: string) => Promise<void>;
 }
 
+function renderCardCanvas(params: {
+  sourceImage: HTMLImageElement | null;
+  pixelFilter: boolean;
+  poi: PoiDefinition;
+  nickname: string;
+  lat: number;
+  lng: number;
+  isHoloCard: boolean;
+  prestige: number;
+  rarity: number;
+  potentialXp: number;
+  isDailyBounty: boolean;
+  edition: CardEdition;
+}): string {
+  const {
+    sourceImage,
+    pixelFilter,
+    poi,
+    nickname,
+    lat,
+    lng,
+    isHoloCard,
+    prestige,
+    rarity,
+    potentialXp,
+    isDailyBounty,
+    edition,
+  } = params;
+
+  const W = 540;
+  const H = 720;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+
+  const isGolden = edition === "golden_hour";
+  const isNight = edition === "night";
+
+  ctx.fillStyle = isHoloCard
+    ? "#1a1033"
+    : isGolden
+      ? "#24120c"
+      : isNight
+        ? "#070b1e"
+        : "#0b0e1a";
+  ctx.fillRect(0, 0, W, H);
+
+  if (isHoloCard) {
+    const holoGrad = ctx.createLinearGradient(0, 0, W, H);
+    holoGrad.addColorStop(0, "#ffd166");
+    holoGrad.addColorStop(0.35, "#4cc9f0");
+    holoGrad.addColorStop(0.7, "#e879f9");
+    holoGrad.addColorStop(1, "#ffd166");
+    ctx.strokeStyle = holoGrad;
+  } else if (isGolden) {
+    const sunGrad = ctx.createLinearGradient(0, 0, W, H);
+    sunGrad.addColorStop(0, "#ff9e00");
+    sunGrad.addColorStop(0.5, "#ff4d6d");
+    sunGrad.addColorStop(1, "#ffd166");
+    ctx.strokeStyle = sunGrad;
+  } else if (isNight) {
+    const nightGrad = ctx.createLinearGradient(0, 0, W, H);
+    nightGrad.addColorStop(0, "#38bdf8");
+    nightGrad.addColorStop(0.5, "#818cf8");
+    nightGrad.addColorStop(1, "#22d3ee");
+    ctx.strokeStyle = nightGrad;
+  } else {
+    ctx.strokeStyle = "#ffd166";
+  }
+  ctx.lineWidth = 14;
+  ctx.strokeRect(7, 7, W - 14, H - 14);
+
+  ctx.strokeStyle = isHoloCard
+    ? "#f0abfc"
+    : isGolden
+      ? "#ff9e00"
+      : isNight
+        ? "#38bdf8"
+        : "#4cc9f0";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(20, 20, W - 40, H - 40);
+
+  ctx.fillStyle = isHoloCard
+    ? "#f0abfc"
+    : isGolden
+      ? "#ff9e00"
+      : isNight
+        ? "#38bdf8"
+        : "#ffd166";
+  ctx.font = "bold 19px monospace";
+  const headerTag = isHoloCard
+    ? `HOLO • PRESTIGIO ★${Math.max(1, prestige)}`
+    : isGolden
+      ? "GOLDEN HOUR EDITION"
+      : isNight
+        ? "NIGHT EDITION"
+        : "MARSALA-DEX CARD";
+  ctx.fillText(`${"★".repeat(rarity)} ${headerTag}`, 34, 56);
+
+  ctx.fillStyle = "#38e54d";
+  ctx.textAlign = "right";
+  ctx.fillText(`+${potentialXp} XP`, W - 34, 56);
+  ctx.textAlign = "left";
+
+  const px = 34;
+  const py = 74;
+  const pw = W - 68;
+  const ph = 410;
+
+  ctx.fillStyle = "#05070f";
+  ctx.fillRect(px, py, pw, ph);
+
+  if (sourceImage) {
+    const scale = Math.max(pw / sourceImage.width, ph / sourceImage.height);
+    const sw = pw / scale;
+    const sh = ph / scale;
+    const sx = (sourceImage.width - sw) / 2;
+    const sy = (sourceImage.height - sh) / 2;
+
+    if (pixelFilter) {
+      const tmp = document.createElement("canvas");
+      tmp.width = 135;
+      tmp.height = 102;
+      const tctx = tmp.getContext("2d")!;
+      tctx.drawImage(sourceImage, sx, sy, sw, sh, 0, 0, tmp.width, tmp.height);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(tmp, 0, 0, tmp.width, tmp.height, px, py, pw, ph);
+      ctx.imageSmoothingEnabled = true;
+    } else {
+      ctx.drawImage(sourceImage, sx, sy, sw, sh, px, py, pw, ph);
+    }
+  } else {
+    // Sfondo 8-bit procedurale per sblocco rapido Superuser senza fotocamera
+    const skyGrad = ctx.createLinearGradient(px, py, px, py + ph);
+    skyGrad.addColorStop(0, "#1e1b4b");
+    skyGrad.addColorStop(0.65, "#312e81");
+    skyGrad.addColorStop(0.65, "#0f172a");
+    skyGrad.addColorStop(1, "#1e293b");
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(px, py, pw, ph);
+
+    ctx.fillStyle = "#ffd166";
+    ctx.beginPath();
+    ctx.arc(px + pw - 95, py + 95, 36, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.font = "110px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(poi.icon, px + pw / 2, py + 235);
+
+    ctx.fillStyle = "#4cc9f0";
+    ctx.font = "bold 18px monospace";
+    ctx.fillText("MARSALA • LILIBEO 8-BIT", px + pw / 2, py + 345);
+    ctx.textAlign = "left";
+  }
+
+  if (isHoloCard || isGolden || isNight) {
+    const sheen = ctx.createLinearGradient(px, py, px + pw, py + ph);
+    if (isGolden) {
+      sheen.addColorStop(0, "rgba(255, 158, 0, 0.22)");
+      sheen.addColorStop(1, "rgba(255, 77, 109, 0.16)");
+    } else if (isNight) {
+      sheen.addColorStop(0, "rgba(56, 189, 248, 0.18)");
+      sheen.addColorStop(1, "rgba(129, 140, 248, 0.18)");
+    } else {
+      sheen.addColorStop(0, "rgba(255, 209, 102, 0.16)");
+      sheen.addColorStop(0.5, "rgba(76, 201, 240, 0.18)");
+      sheen.addColorStop(1, "rgba(232, 121, 249, 0.18)");
+    }
+    ctx.fillStyle = sheen;
+    ctx.fillRect(px, py, pw, ph);
+  }
+
+  ctx.strokeStyle = isGolden ? "#ff9e00" : isNight ? "#38bdf8" : "#f4f1de";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(px, py, pw, ph);
+
+  ctx.fillStyle = "#ffd166";
+  ctx.font = "bold 25px monospace";
+  ctx.fillText(poi.name.slice(0, 28), 34, 530);
+
+  ctx.fillStyle = "#4cc9f0";
+  ctx.font = "20px monospace";
+  ctx.fillText(poi.zone.slice(0, 38), 34, 562);
+
+  ctx.fillStyle = "#e2e8f0";
+  ctx.font = "18px monospace";
+  ctx.fillText(`PLAYER: ${nickname}`, 34, 606);
+
+  ctx.fillText(`GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`, 34, 636);
+
+  const dateStr = new Date().toLocaleDateString("it-IT");
+  ctx.fillStyle = isGolden ? "#ffb703" : isNight ? "#7dd3fc" : "#94a3b8";
+  const footerTag = isGolden
+    ? "SUNSET EDITION"
+    : isNight
+      ? "NIGHT EDITION"
+      : isDailyBounty
+        ? "DAILY BOUNTY"
+        : "MARSALA QUEST 8-BIT";
+  ctx.fillText(`${footerTag} • ${dateStr}`, 34, 674);
+
+  return canvas.toDataURL("image/jpeg", 0.86);
+}
+
 export const CameraCardModal: React.FC<CameraCardModalProps> = ({
   poi,
   nickname,
+  isSuperuser = false,
   prestige,
   theme,
   isDailyBounty,
@@ -49,6 +259,7 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
   const [pixelFilter, setPixelFilter] = useState(true);
   const [liveCameraOpen, setLiveCameraOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const rarity = poi.rarity ?? 2;
@@ -74,11 +285,11 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
 
   const gpsMargin = Math.min(Math.max(gps.accuracy || 0, 0), 45);
   const isInRange =
-    distance !== null && distance <= effectiveRadius + gpsMargin;
+    isSuperuser ||
+    (distance !== null && distance <= effectiveRadius + gpsMargin);
 
-  // Puoi scattare se: POI nuovo, OPPURE Daily Bounty, OPPURE nuova Edizione Golden Hour / Notturna disponibile
   const canTakeNewShot =
-    !existingUnlock || isDailyBounty || isNewSpecialEdition;
+    isSuperuser || !existingUnlock || isDailyBounty || isNewSpecialEdition;
 
   const stopLiveCamera = () => {
     if (streamRef.current) {
@@ -90,186 +301,45 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
 
   useEffect(() => stopLiveCamera, []);
 
-  // Genera la Trading Card 8-Bit (Standard, Holo, Golden Hour o Night Edition)
+  const buildCurrentCardDataUrl = useCallback(
+    (sourceImage: HTMLImageElement | null) =>
+      renderCardCanvas({
+        sourceImage,
+        pixelFilter,
+        poi,
+        nickname,
+        lat: gps.lat ?? poi.lat,
+        lng: gps.lng ?? poi.lng,
+        isHoloCard,
+        prestige,
+        rarity,
+        potentialXp,
+        isDailyBounty,
+        edition: activeEdition,
+      }),
+    [
+      pixelFilter,
+      poi,
+      nickname,
+      gps.lat,
+      gps.lng,
+      isHoloCard,
+      prestige,
+      rarity,
+      potentialXp,
+      isDailyBounty,
+      activeEdition,
+    ],
+  );
+
   useEffect(() => {
     if (!rawPhoto) return;
     const img = new Image();
     img.onload = () => {
-      const W = 540;
-      const H = 720;
-      const canvas = document.createElement("canvas");
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext("2d")!;
-
-      const isGolden = activeEdition === "golden_hour";
-      const isNight = activeEdition === "night";
-
-      // Sfondo cartuccia per edizione
-      ctx.fillStyle = isHoloCard
-        ? "#1a1033"
-        : isGolden
-          ? "#24120c"
-          : isNight
-            ? "#070b1e"
-            : "#0b0e1a";
-      ctx.fillRect(0, 0, W, H);
-
-      // Cornice esterna
-      if (isHoloCard) {
-        const holoGrad = ctx.createLinearGradient(0, 0, W, H);
-        holoGrad.addColorStop(0, "#ffd166");
-        holoGrad.addColorStop(0.35, "#4cc9f0");
-        holoGrad.addColorStop(0.7, "#e879f9");
-        holoGrad.addColorStop(1, "#ffd166");
-        ctx.strokeStyle = holoGrad;
-      } else if (isGolden) {
-        const sunGrad = ctx.createLinearGradient(0, 0, W, H);
-        sunGrad.addColorStop(0, "#ff9e00");
-        sunGrad.addColorStop(0.5, "#ff4d6d");
-        sunGrad.addColorStop(1, "#ffd166");
-        ctx.strokeStyle = sunGrad;
-      } else if (isNight) {
-        const nightGrad = ctx.createLinearGradient(0, 0, W, H);
-        nightGrad.addColorStop(0, "#38bdf8");
-        nightGrad.addColorStop(0.5, "#818cf8");
-        nightGrad.addColorStop(1, "#22d3ee");
-        ctx.strokeStyle = nightGrad;
-      } else {
-        ctx.strokeStyle = "#ffd166";
-      }
-      ctx.lineWidth = 14;
-      ctx.strokeRect(7, 7, W - 14, H - 14);
-
-      ctx.strokeStyle = isHoloCard
-        ? "#f0abfc"
-        : isGolden
-          ? "#ff9e00"
-          : isNight
-            ? "#38bdf8"
-            : "#4cc9f0";
-      ctx.lineWidth = 4;
-      ctx.strokeRect(20, 20, W - 40, H - 40);
-
-      // Intestazione Card
-      ctx.fillStyle = isHoloCard
-        ? "#f0abfc"
-        : isGolden
-          ? "#ff9e00"
-          : isNight
-            ? "#38bdf8"
-            : "#ffd166";
-      ctx.font = "bold 19px monospace";
-      const headerTag = isHoloCard
-        ? `HOLO • PRESTIGIO ★${Math.max(1, prestige)}`
-        : isGolden
-          ? "GOLDEN HOUR EDITION"
-          : isNight
-            ? "NIGHT EDITION"
-            : "MARSALA-DEX CARD";
-      ctx.fillText(`${"★".repeat(rarity)} ${headerTag}`, 34, 56);
-
-      ctx.fillStyle = "#38e54d";
-      ctx.textAlign = "right";
-      ctx.fillText(`+${potentialXp} XP`, W - 34, 56);
-      ctx.textAlign = "left";
-
-      // Riquadro foto centrale
-      const px = 34;
-      const py = 74;
-      const pw = W - 68;
-      const ph = 410;
-
-      ctx.fillStyle = "#05070f";
-      ctx.fillRect(px, py, pw, ph);
-
-      const scale = Math.max(pw / img.width, ph / img.height);
-      const sw = pw / scale;
-      const sh = ph / scale;
-      const sx = (img.width - sw) / 2;
-      const sy = (img.height - sh) / 2;
-
-      if (pixelFilter) {
-        const tmp = document.createElement("canvas");
-        tmp.width = 135;
-        tmp.height = 102;
-        const tctx = tmp.getContext("2d")!;
-        tctx.drawImage(img, sx, sy, sw, sh, 0, 0, tmp.width, tmp.height);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(tmp, 0, 0, tmp.width, tmp.height, px, py, pw, ph);
-        ctx.imageSmoothingEnabled = true;
-      } else {
-        ctx.drawImage(img, sx, sy, sw, sh, px, py, pw, ph);
-      }
-
-      // Riflesso diagonale per Edizioni Speciali / Holo
-      if (isHoloCard || isGolden || isNight) {
-        const sheen = ctx.createLinearGradient(px, py, px + pw, py + ph);
-        if (isGolden) {
-          sheen.addColorStop(0, "rgba(255, 158, 0, 0.22)");
-          sheen.addColorStop(1, "rgba(255, 77, 109, 0.16)");
-        } else if (isNight) {
-          sheen.addColorStop(0, "rgba(56, 189, 248, 0.18)");
-          sheen.addColorStop(1, "rgba(129, 140, 248, 0.18)");
-        } else {
-          sheen.addColorStop(0, "rgba(255, 209, 102, 0.16)");
-          sheen.addColorStop(0.5, "rgba(76, 201, 240, 0.18)");
-          sheen.addColorStop(1, "rgba(232, 121, 249, 0.18)");
-        }
-        ctx.fillStyle = sheen;
-        ctx.fillRect(px, py, pw, ph);
-      }
-
-      ctx.strokeStyle = isGolden ? "#ff9e00" : isNight ? "#38bdf8" : "#f4f1de";
-      ctx.lineWidth = 4;
-      ctx.strokeRect(px, py, pw, ph);
-
-      // Titolo luogo e zona
-      ctx.fillStyle = "#ffd166";
-      ctx.font = "bold 25px monospace";
-      ctx.fillText(poi.name.slice(0, 28), 34, 530);
-
-      ctx.fillStyle = "#4cc9f0";
-      ctx.font = "20px monospace";
-      ctx.fillText(poi.zone.slice(0, 38), 34, 562);
-
-      // Metadati certificati GPS
-      ctx.fillStyle = "#e2e8f0";
-      ctx.font = "18px monospace";
-      ctx.fillText(`PLAYER: ${nickname}`, 34, 606);
-
-      const latStr = (gps.lat ?? poi.lat).toFixed(5);
-      const lngStr = (gps.lng ?? poi.lng).toFixed(5);
-      ctx.fillText(`GPS: ${latStr}, ${lngStr}`, 34, 636);
-
-      const dateStr = new Date().toLocaleDateString("it-IT");
-      ctx.fillStyle = isGolden ? "#ffb703" : isNight ? "#7dd3fc" : "#94a3b8";
-      const footerTag = isGolden
-        ? "SUNSET EDITION"
-        : isNight
-          ? "NIGHT EDITION"
-          : isDailyBounty
-            ? "DAILY BOUNTY"
-            : "MARSALA QUEST 8-BIT";
-      ctx.fillText(`${footerTag} • ${dateStr}`, 34, 674);
-
-      setCardPreview(canvas.toDataURL("image/jpeg", 0.86));
+      setCardPreview(buildCurrentCardDataUrl(img));
     };
     img.src = rawPhoto;
-  }, [
-    rawPhoto,
-    pixelFilter,
-    poi,
-    nickname,
-    gps.lat,
-    gps.lng,
-    isHoloCard,
-    prestige,
-    rarity,
-    potentialXp,
-    isDailyBounty,
-    activeEdition,
-  ]);
+  }, [rawPhoto, buildCurrentCardDataUrl]);
 
   const handleFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -336,13 +406,39 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
     }
   };
 
-  const handleDownloadCard = () => {
+  const handleSuperuserInstantUnlock = async () => {
+    sound8bit.click();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const cardDataUrl =
+        rawPhoto && cardPreview ? cardPreview : buildCurrentCardDataUrl(null);
+      await onSubmitUnlock(cardDataUrl);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Errore durante lo sblocco Superuser.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSaveOrShareCard = async () => {
     if (!cardPreview) return;
     sound8bit.click();
-    const a = document.createElement("a");
-    a.href = cardPreview;
-    a.download = `marsala-card-${poi.id}.jpg`;
-    a.click();
+    setSharing(true);
+    try {
+      await shareOrSaveDataUrl(
+        cardPreview,
+        `marsala-card-${poi.id}.jpg`,
+        `Marsala Quest 8-Bit • ${poi.name}`,
+        `Ho sbloccato la Card "${poi.name}" su Marsala Quest 8-Bit!`,
+      );
+    } finally {
+      setSharing(false);
+    }
   };
 
   return (
@@ -454,13 +550,15 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
             </p>
             <p className="text-lg text-slate-200 leading-tight">
               Raggio richiesto: <strong>{effectiveRadius}m</strong>
+              {isSuperuser ? " • ⚡ Bypass Superuser" : ""}
             </p>
           </div>
-          {isInRange ? (
-            <span className="font-pixel text-[8px] px-2 py-1 bg-black/50 border border-white/30">
-              ✅ IN ZONA
-            </span>
-          ) : (
+          <div className="flex items-center gap-1.5 shrink-0">
+            {isInRange && (
+              <span className="font-pixel text-[8px] px-2 py-1 bg-black/50 border border-white/30">
+                ✅ IN ZONA
+              </span>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -468,11 +566,11 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
                 stopLiveCamera();
                 onTrackWithCompass(poi);
               }}
-              className="nes-btn px-2.5 py-2 bg-[#4cc9f0] text-black text-[8px] shrink-0"
+              className="nes-btn px-2.5 py-2 bg-[#4cc9f0] text-black text-[8px]"
             >
               🧭 GUIDAMI
             </button>
-          )}
+          </div>
         </div>
 
         {/* Anteprima Card o Mirino Fotocamera */}
@@ -585,18 +683,34 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
               {submitting
                 ? "SINCRONIZZAZIONE..."
                 : existingUnlock
-                  ? "✨ AGGIORNA EDIZIONE CARD"
+                  ? "✨ AGGIORNA CARD"
                   : `★ SBLOCCA CARD (+${potentialXp} XP)`}
             </button>
           )}
 
-          {cardPreview && (
+          {/* Pulsante Superuser (Fabbro): sblocca istantaneamente senza GPS e senza foto */}
+          {isSuperuser && (
             <button
               type="button"
-              onClick={handleDownloadCard}
-              className="nes-btn w-full py-2.5 bg-[#26335c] text-[#ffd166] text-[8px]"
+              disabled={submitting}
+              onClick={() => void handleSuperuserInstantUnlock()}
+              className="nes-btn w-full py-3 bg-[#c026d3] text-white text-[8px] sm:text-[9px] disabled:opacity-50"
             >
-              ⬇️ SCARICA CARD PNG SUL TELEFONO
+              {submitting
+                ? "SBLOCCO SUPERUSER..."
+                : `⚡ SUPERUSER: SBLOCCA SENZA GPS / FOTO (+${potentialXp} XP)`}
+            </button>
+          )}
+
+          {/* Salva o Condividi Card acquisita */}
+          {cardPreview && (existingUnlock || rawPhoto) && (
+            <button
+              type="button"
+              disabled={sharing}
+              onClick={() => void handleSaveOrShareCard()}
+              className="nes-btn w-full py-3 bg-[#38e54d] text-black text-[9px] disabled:opacity-50"
+            >
+              {sharing ? "APERTURA..." : "📲 Salva o Condividi"}
             </button>
           )}
         </div>

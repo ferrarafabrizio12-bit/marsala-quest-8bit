@@ -334,7 +334,8 @@ export default function App() {
   };
 
   const handleUnlockSubmit = async (photoDataUrl: string) => {
-    if (!selectedPoi || gps.lat === null || gps.lng === null) return;
+    if (!selectedPoi || !user) return;
+    if (!user.isSuperuser && (gps.lat === null || gps.lng === null)) return;
     const prevCount = Object.keys(unlocks).length;
     const res = await api.unlockPoi({
       poiId: selectedPoi.id,
@@ -653,6 +654,7 @@ export default function App() {
         <CameraCardModal
           poi={selectedPoi}
           nickname={user.nickname}
+          isSuperuser={Boolean(user.isSuperuser)}
           prestige={user.prestige}
           theme={theme}
           isDailyBounty={dailyBounty.poiId === selectedPoi.id}

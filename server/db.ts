@@ -20,6 +20,7 @@ export interface UserRecord {
   bonusXp: number;
   bountyStreak: number;
   lastBountyDate: string | null;
+  isSuperuser: boolean;
   createdAt: string;
 }
 
@@ -83,6 +84,7 @@ function mapUserRow(r: Record<string, unknown>): UserRecord {
     bonusXp: Number(r.bonus_xp || 0),
     bountyStreak: Number(r.bounty_streak || 0),
     lastBountyDate: r.last_bounty_date ? String(r.last_bounty_date) : null,
+    isSuperuser: Boolean(r.is_superuser),
     createdAt: new Date(String(r.created_at)).toISOString(),
   };
 }
@@ -100,6 +102,7 @@ export async function initDb(): Promise<void> {
       bonus_xp INTEGER NOT NULL DEFAULT 0,
       bounty_streak INTEGER NOT NULL DEFAULT 0,
       last_bounty_date TEXT,
+      is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
@@ -109,7 +112,8 @@ export async function initDb(): Promise<void> {
       ADD COLUMN IF NOT EXISTS prestige INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS bonus_xp INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS bounty_streak INTEGER NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS last_bounty_date TEXT;
+      ADD COLUMN IF NOT EXISTS last_bounty_date TEXT,
+      ADD COLUMN IF NOT EXISTS is_superuser BOOLEAN NOT NULL DEFAULT FALSE;
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_nickname_lower
       ON users (LOWER(nickname));
@@ -141,12 +145,37 @@ export async function initDb(): Promise<void> {
   `);
 }
 
+export async function ensureSuperuser(
+  id: string,
+  username: string,
+  nickname: string,
+  passwordHash: string,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO users (id, username, nickname, password_hash, avatar_config, equipped_title, is_superuser)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, TRUE)
+     ON CONFLICT (username)
+     DO UPDATE SET
+       password_hash = EXCLUDED.password_hash,
+       is_superuser = TRUE`,
+    [
+      id,
+      username,
+      nickname,
+      passwordHash,
+      DEFAULT_AVATAR_JSON,
+      DEFAULT_TITLE_ID,
+    ],
+  );
+}
+
+const USER_COLUMNS = `id, username, nickname, password_hash, avatar_config, equipped_title, prestige, bonus_xp, bounty_streak, last_bounty_date, is_superuser, created_at`;
+
 export async function findUserByUsername(
   username: string,
 ): Promise<UserRecord | null> {
   const { rows } = await pool.query(
-    `SELECT id, username, nickname, password_hash, avatar_config, equipped_title, prestige, bonus_xp, bounty_streak, last_bounty_date, created_at
-     FROM users WHERE username = $1`,
+    `SELECT ${USER_COLUMNS} FROM users WHERE username = $1`,
     [username],
   );
   return rows[0] ? mapUserRow(rows[0]) : null;
@@ -154,8 +183,7 @@ export async function findUserByUsername(
 
 export async function findUserById(id: string): Promise<UserRecord | null> {
   const { rows } = await pool.query(
-    `SELECT id, username, nickname, password_hash, avatar_config, equipped_title, prestige, bonus_xp, bounty_streak, last_bounty_date, created_at
-     FROM users WHERE id = $1`,
+    `SELECT ${USER_COLUMNS} FROM users WHERE id = $1`,
     [id],
   );
   return rows[0] ? mapUserRow(rows[0]) : null;
@@ -187,7 +215,7 @@ export async function createUser(user: {
   const { rows } = await pool.query(
     `INSERT INTO users (id, username, nickname, password_hash, avatar_config, equipped_title)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6)
-     RETURNING id, username, nickname, password_hash, avatar_config, equipped_title, prestige, bonus_xp, bounty_streak, last_bounty_date, created_at`,
+     RETURNING ${USER_COLUMNS}`,
     [
       user.id,
       user.username,
@@ -375,7 +403,7 @@ export async function activateUserPrestige(
        SET prestige = prestige + 1,
            bonus_xp = bonus_xp + $1
        WHERE id = $2
-       RETURNING id, username, nickname, password_hash, avatar_config, equipped_title, prestige, bonus_xp, bounty_streak, last_bounty_date, created_at`,
+       RETURNING ${USER_COLUMNS}`,
       [bankedXp, userId],
     );
 

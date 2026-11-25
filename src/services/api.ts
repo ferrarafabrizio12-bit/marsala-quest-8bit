@@ -95,8 +95,8 @@ export const api = {
 
   unlockPoi: (payload: {
     poiId: string;
-    lat: number;
-    lng: number;
+    lat: number | null;
+    lng: number | null;
     accuracy: number;
     photoDataUrl: string;
     requestedEdition?: RetroTheme;

@@ -10,6 +10,7 @@ export interface UserProfile {
   prestige: number;
   bountyStreak: number;
   lastBountyDate: string | null;
+  isSuperuser?: boolean;
 }
 
 export interface UnlockData {

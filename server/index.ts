@@ -9,6 +9,7 @@ import {
   addEasterEgg,
   claimDailyBountyReward,
   createUser,
+  ensureSuperuser,
   findUserById,
   findUserByUsername,
   getLeaderboardRows,
@@ -137,6 +138,7 @@ function serializeUser(u: UserRecord) {
     prestige: u.prestige,
     bountyStreak: u.bountyStreak,
     lastBountyDate: u.lastBountyDate,
+    isSuperuser: u.isSuperuser,
   };
 }
 
@@ -318,31 +320,33 @@ app.patch(
       }
 
       const candidate = sanitizeAvatarConfig(req.body);
-      const [unlocks, easterEggs] = await Promise.all([
-        getUserUnlocks(req.userId!),
-        getUserEasterEggs(req.userId!),
-      ]);
+      if (!user.isSuperuser) {
+        const [unlocks, easterEggs] = await Promise.all([
+          getUserUnlocks(req.userId!),
+          getUserEasterEggs(req.userId!),
+        ]);
 
-      const unlockedSet = new Set(
-        getUnlockedCosmeticIds(
-          Object.keys(unlocks).length,
-          easterEggs,
-          user.prestige,
-        ),
-      );
+        const unlockedSet = new Set(
+          getUnlockedCosmeticIds(
+            Object.keys(unlocks).length,
+            easterEggs,
+            user.prestige,
+          ),
+        );
 
-      const chosen = [
-        candidate.hat,
-        candidate.glasses,
-        candidate.top,
-        candidate.bottom,
-      ];
-      if (!chosen.every((id) => unlockedSet.has(id))) {
-        res.status(403).json({
-          error:
-            "Uno o più indumenti selezionati non sono ancora stati sbloccati!",
-        });
-        return;
+        const chosen = [
+          candidate.hat,
+          candidate.glasses,
+          candidate.top,
+          candidate.bottom,
+        ];
+        if (!chosen.every((id) => unlockedSet.has(id))) {
+          res.status(403).json({
+            error:
+              "Uno o più indumenti selezionati non sono ancora stati sbloccati!",
+          });
+          return;
+        }
       }
 
       await updateUserAvatar(req.userId!, candidate);
@@ -372,25 +376,28 @@ app.patch(
         (req.body as { titleId?: string }).titleId,
       );
       const titleDef = getTitleById(titleId);
-      const [unlocks, easterEggs] = await Promise.all([
-        getUserUnlocks(user.id),
-        getUserEasterEggs(user.id),
-      ]);
 
-      const editionsOwned = Object.values(unlocks).map((u) => u.edition);
-      const allowed = isTitleUnlocked(titleDef, {
-        unlockedCardsCount: Object.keys(unlocks).length,
-        easterEggs,
-        prestige: user.prestige,
-        bountyStreak: user.bountyStreak,
-        editionsOwned,
-      });
+      if (!user.isSuperuser) {
+        const [unlocks, easterEggs] = await Promise.all([
+          getUserUnlocks(user.id),
+          getUserEasterEggs(user.id),
+        ]);
 
-      if (!allowed) {
-        res
-          .status(403)
-          .json({ error: "Non hai ancora sbloccato questo titolo!" });
-        return;
+        const editionsOwned = Object.values(unlocks).map((u) => u.edition);
+        const allowed = isTitleUnlocked(titleDef, {
+          unlockedCardsCount: Object.keys(unlocks).length,
+          easterEggs,
+          prestige: user.prestige,
+          bountyStreak: user.bountyStreak,
+          editionsOwned,
+        });
+
+        if (!allowed) {
+          res
+            .status(403)
+            .json({ error: "Non hai ancora sbloccato questo titolo!" });
+          return;
+        }
       }
 
       await updateUserTitle(user.id, titleDef.id);
@@ -415,7 +422,10 @@ app.post(
       }
 
       const unlocks = await getUserUnlocks(user.id);
-      if (Object.keys(unlocks).length < MARSALA_POIS.length) {
+      if (
+        !user.isSuperuser &&
+        Object.keys(unlocks).length < MARSALA_POIS.length
+      ) {
         res.status(403).json({
           error: `Devi prima completare tutti i ${MARSALA_POIS.length} luoghi di Marsala per attivare il Prestigio!`,
         });
@@ -467,33 +477,43 @@ app.post(
         res.status(404).json({ error: "Punto di interesse non valido." });
         return;
       }
-      if (typeof lat !== "number" || typeof lng !== "number") {
-        res.status(400).json({ error: "Coordinate GPS reali obbligatorie." });
-        return;
-      }
-      if (!photoDataUrl || !photoDataUrl.startsWith("data:image/")) {
-        res
-          .status(400)
-          .json({ error: "Foto obbligatoria per sbloccare la Card." });
-        return;
+
+      // Per gli utenti standard GPS e foto sono obbligatori; per il Superuser (Fabbro) vengono bypassati
+      if (!user.isSuperuser) {
+        if (typeof lat !== "number" || typeof lng !== "number") {
+          res.status(400).json({ error: "Coordinate GPS reali obbligatorie." });
+          return;
+        }
+        if (!photoDataUrl || !photoDataUrl.startsWith("data:image/")) {
+          res
+            .status(400)
+            .json({ error: "Foto obbligatoria per sbloccare la Card." });
+          return;
+        }
+
+        const requiredRadius = getEffectiveUnlockRadius(poi, user.prestige);
+        const gpsMargin = Math.min(Math.max(accuracy || 0, 0), 45);
+        const distance = haversineMeters(lat, lng, poi.lat, poi.lng);
+
+        if (distance > requiredRadius + gpsMargin) {
+          res.status(403).json({
+            error: `Sei a ${Math.round(distance)}m da ${poi.name}. Avvicinati entro ${requiredRadius}m!`,
+            distance: Math.round(distance),
+          });
+          return;
+        }
       }
 
-      const requiredRadius = getEffectiveUnlockRadius(poi, user.prestige);
-      const gpsMargin = Math.min(Math.max(accuracy || 0, 0), 45);
-      const distance = haversineMeters(lat, lng, poi.lat, poi.lng);
-
-      if (distance > requiredRadius + gpsMargin) {
-        res.status(403).json({
-          error: `Sei a ${Math.round(distance)}m da ${poi.name}. Avvicinati entro ${requiredRadius}m!`,
-          distance: Math.round(distance),
-        });
-        return;
-      }
+      const effectiveLat = typeof lat === "number" ? lat : poi.lat;
+      const effectiveLng = typeof lng === "number" ? lng : poi.lng;
+      const effectivePhoto =
+        photoDataUrl && photoDataUrl.startsWith("data:image/")
+          ? photoDataUrl
+          : "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
       const existingUnlocks = await getUserUnlocks(user.id);
       const prevUnlock = existingUnlocks[poi.id];
 
-      // Edizione Golden Hour / Notturna (da orario Italia o tema attivo)
       const serverEdition = getCurrentCardEdition(requestedEdition);
       const edition: CardEdition = serverEdition;
 
@@ -511,9 +531,9 @@ app.post(
 
       const unlock = await upsertUnlock(user.id, {
         poiId: poi.id,
-        photoDataUrl,
-        lat,
-        lng,
+        photoDataUrl: effectivePhoto,
+        lat: effectiveLat,
+        lng: effectiveLng,
         accuracy: Math.round(accuracy || 0),
         xpEarned: earnedXp,
         isHolo,
@@ -659,10 +679,17 @@ app.get(
 console.log("[MARSALA QUEST 8-BIT API] Connessione a PostgreSQL in corso...");
 
 initDb()
-  .then(() => {
+  .then(async () => {
+    const superHash = await bcrypt.hash("Hacker00", 10);
+    await ensureSuperuser(
+      "00000000-0000-4000-8000-000000000001",
+      "fabbro",
+      "Fabbro",
+      superHash,
+    );
     app.listen(PORT, () => {
       console.log(
-        `[MARSALA QUEST 8-BIT API] Attiva su porta ${PORT} (PostgreSQL OK)`,
+        `[MARSALA QUEST 8-BIT API] Attiva su porta ${PORT} (PostgreSQL + Superuser OK)`,
       );
     });
   })

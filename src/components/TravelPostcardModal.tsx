@@ -3,6 +3,7 @@ import { MARSALA_BOUNDS, MARSALA_POIS } from "../../shared/pois";
 import { getTitleById } from "../../shared/cosmetics";
 import type { UnlockData, UserProfile } from "../types/game";
 import { renderAvatarSvgString } from "../utils/avatarPixels";
+import { shareOrSaveDataUrl } from "../utils/shareImage";
 import { sound8bit } from "../utils/sound8bit";
 
 interface TravelPostcardModalProps {
@@ -283,43 +284,20 @@ export const TravelPostcardModal: React.FC<TravelPostcardModalProps> = ({
     easterEggsCount,
   ]);
 
-  const handleNativeShare = async () => {
+  const handleSaveOrShare = async () => {
     if (!postcardUrl) return;
     sound8bit.click();
     setSharing(true);
     try {
-      const res = await fetch(postcardUrl);
-      const blob = await res.blob();
-      const file = new File([blob], `marsala-cartolina-${user.nickname}.png`, {
-        type: "image/png",
-      });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: "Marsala Quest 8-Bit",
-          text: `Ho illuminato il ${percent}% di Marsala (${totalXp} XP) su Marsala Quest 8-Bit!`,
-        });
-      } else {
-        const a = document.createElement("a");
-        a.href = postcardUrl;
-        a.download = `marsala-cartolina-${user.nickname}.png`;
-        a.click();
-      }
-    } catch {
-      // L'utente ha annullato la condivisione nativa
+      await shareOrSaveDataUrl(
+        postcardUrl,
+        `marsala-cartolina-${user.nickname}.png`,
+        "Marsala Quest 8-Bit",
+        `Ho illuminato il ${percent}% di Marsala (${totalXp} XP) su Marsala Quest 8-Bit!`,
+      );
     } finally {
       setSharing(false);
     }
-  };
-
-  const handleDownload = () => {
-    if (!postcardUrl) return;
-    sound8bit.click();
-    const a = document.createElement("a");
-    a.href = postcardUrl;
-    a.download = `marsala-cartolina-${user.nickname}.png`;
-    a.click();
   };
 
   return (
@@ -341,7 +319,7 @@ export const TravelPostcardModal: React.FC<TravelPostcardModalProps> = ({
           <img
             src={postcardUrl}
             alt="Cartolina Marsala Quest"
-            className="mx-auto max-h-[54dvh] w-auto border-[3px] border-[#4cc9f0] shadow-[4px_4px_0_#000] mb-3"
+            className="mx-auto max-h-[58dvh] w-auto border-[3px] border-[#4cc9f0] shadow-[4px_4px_0_#000] mb-3"
           />
         ) : (
           <div className="h-64 flex items-center justify-center font-pixel text-[9px] text-[#4cc9f0]">
@@ -349,24 +327,14 @@ export const TravelPostcardModal: React.FC<TravelPostcardModalProps> = ({
           </div>
         )}
 
-        <div className="space-y-2">
-          <button
-            type="button"
-            disabled={!postcardUrl || sharing}
-            onClick={() => void handleNativeShare()}
-            className="nes-btn w-full py-3 bg-[#38e54d] text-black text-[9px]"
-          >
-            {sharing ? "APERTURA..." : "📲 CONDIVIDI SU WHATSAPP / STORIES"}
-          </button>
-          <button
-            type="button"
-            disabled={!postcardUrl}
-            onClick={handleDownload}
-            className="nes-btn w-full py-2.5 bg-[#26335c] text-[#ffd166] text-[8px]"
-          >
-            ⬇️ SALVA PNG NEL RULLINO
-          </button>
-        </div>
+        <button
+          type="button"
+          disabled={!postcardUrl || sharing}
+          onClick={() => void handleSaveOrShare()}
+          className="nes-btn w-full py-3.5 bg-[#38e54d] text-black text-[9px]"
+        >
+          {sharing ? "APERTURA..." : "📲 Salva o Condividi"}
+        </button>
       </div>
     </div>
   );

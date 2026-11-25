@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   bonus_xp INTEGER NOT NULL DEFAULT 0,
   bounty_streak INTEGER NOT NULL DEFAULT 0,
   last_bounty_date TEXT,
+  is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
