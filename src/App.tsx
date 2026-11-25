@@ -18,6 +18,7 @@ import {
   isStagnoneSunsetHour,
   useKonamiCode,
 } from "./hooks/useEasterEggs";
+import { type WalkingRouteData, fetchWalkingRoute } from "./utils/walkingRoute";
 import { sound8bit } from "./utils/sound8bit";
 import { AuthScreen } from "./components/AuthScreen";
 import { MarsalaFogMap } from "./components/MarsalaFogMap";
@@ -68,6 +69,9 @@ export default function App() {
 
   const [selectedPoi, setSelectedPoi] = useState<PoiDefinition | null>(null);
   const [navTargetPoi, setNavTargetPoi] = useState<PoiDefinition | null>(null);
+  const [walkingRoute, setWalkingRoute] = useState<WalkingRouteData | null>(
+    null,
+  );
   const [justSyncedPoiId, setJustSyncedPoiId] = useState<string | null>(null);
   const [showDex, setShowDex] = useState(false);
   const [showWardrobe, setShowWardrobe] = useState(false);
@@ -133,6 +137,28 @@ export default function App() {
     if (getStoredToken()) void loadProgress();
     else setBooting(false);
   }, [loadProgress]);
+
+  // Calcola il percorso pedonale lungo le strade verso il POI puntato da Guidami
+  useEffect(() => {
+    if (!navTargetPoi || gps.lat === null || gps.lng === null) {
+      setWalkingRoute(null);
+      return;
+    }
+
+    let cancelled = false;
+    void fetchWalkingRoute(
+      gps.lat,
+      gps.lng,
+      navTargetPoi.lat,
+      navTargetPoi.lng,
+    ).then((route) => {
+      if (!cancelled) setWalkingRoute(route);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navTargetPoi, gps.lat, gps.lng]);
 
   const triggerEasterEgg = useCallback(
     async (eggId: string) => {
@@ -236,6 +262,7 @@ export default function App() {
 
   const handleRadarTap = () => {
     sound8bit.click();
+    void gps.requestCompassPermission();
     if (gps.status !== "LOCKED") {
       gps.retry();
       return;
@@ -291,6 +318,7 @@ export default function App() {
       );
       setTotalXp(res.totalXp);
       setNavTargetPoi(null);
+      setWalkingRoute(null);
       setShowPrestigeConfirm(false);
       sound8bit.victoryMedal();
       showToast(
@@ -332,6 +360,7 @@ export default function App() {
     setTotalXp(res.totalXp);
     if (navTargetPoi?.id === selectedPoi.id) {
       setNavTargetPoi(null);
+      setWalkingRoute(null);
     }
     setSelectedPoi(null);
 
@@ -414,6 +443,7 @@ export default function App() {
     setEasterEggs([]);
     setDailyBounty(buildFallbackDailyBounty());
     setNavTargetPoi(null);
+    setWalkingRoute(null);
     setTotalXp(0);
     setTheme("default");
   };
@@ -477,24 +507,30 @@ export default function App() {
         dailyBountyPoiId={dailyBounty.poiId}
         selectedPoi={selectedPoi}
         navTargetPoi={navTargetPoi}
+        walkingRoute={walkingRoute}
         unlocks={unlocks}
         justSyncedPoiId={justSyncedPoiId}
         onSelectPoi={setSelectedPoi}
+        onOpenWardrobe={() => setShowWardrobe(true)}
         onFitMarsalaTap={handleFitMarsalaTap}
       />
 
-      {/* Bussola direzionale verso il POI puntato */}
-      {navTargetPoi && !selectedPoi && (
-        <WayfinderCompass
-          targetPoi={navTargetPoi}
-          gps={gps}
-          prestige={user.prestige}
-          onOpenPoi={(poi) => setSelectedPoi(poi)}
-          onClearTarget={() => setNavTargetPoi(null)}
-        />
-      )}
-
       <BottomDock
+        topSlot={
+          navTargetPoi && !selectedPoi ? (
+            <WayfinderCompass
+              targetPoi={navTargetPoi}
+              walkingRoute={walkingRoute}
+              gps={gps}
+              prestige={user.prestige}
+              onOpenPoi={(poi) => setSelectedPoi(poi)}
+              onClearTarget={() => {
+                setNavTargetPoi(null);
+                setWalkingRoute(null);
+              }}
+            />
+          ) : null
+        }
         unlockedCount={unlockedCount}
         prestige={user.prestige}
         isCompleted={isCompleted}
@@ -515,13 +551,13 @@ export default function App() {
       )}
 
       {toast && (
-        <div className="fixed bottom-36 left-1/2 -translate-x-1/2 z-[1100] nes-box-gold px-3.5 py-2 text-xl text-[#ffd166] text-center max-w-[92vw]">
+        <div className="fixed bottom-44 left-1/2 -translate-x-1/2 z-[1100] nes-box-gold px-3.5 py-2 text-xl text-[#ffd166] text-center max-w-[92vw]">
           {toast}
         </div>
       )}
 
       {showShips1860 && (
-        <div className="fixed bottom-36 left-0 z-[1150] pointer-events-none ship-sail flex items-center gap-4 nes-box-gold px-3.5 py-2">
+        <div className="fixed bottom-44 left-0 z-[1150] pointer-events-none ship-sail flex items-center gap-4 nes-box-gold px-3.5 py-2">
           <span className="text-3xl">🚢</span>
           <span className="font-pixel text-[9px] text-[#ffd166]">
             11 MAGGIO 1860 • PIEMONTE &amp; LOMBARDO!
@@ -621,9 +657,10 @@ export default function App() {
           existingUnlock={unlocks[selectedPoi.id]}
           onClose={() => setSelectedPoi(null)}
           onTrackWithCompass={(poi) => {
+            void gps.requestCompassPermission();
             setNavTargetPoi(poi);
             setSelectedPoi(null);
-            showToast(`🧭 Bussola puntata su ${poi.name}!`);
+            showToast(`🧭 Percorso stradale avviato verso ${poi.name}!`);
           }}
           onSubmitUnlock={handleUnlockSubmit}
         />

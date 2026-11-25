@@ -11,6 +11,7 @@ import type { AvatarConfig } from "../../shared/cosmetics";
 import type { RealGpsState } from "../hooks/useRealGps";
 import type { UnlockData } from "../types/game";
 import { renderAvatarSvgString } from "../utils/avatarPixels";
+import type { WalkingRouteData } from "../utils/walkingRoute";
 import { sound8bit } from "../utils/sound8bit";
 
 interface MarsalaFogMapProps {
@@ -19,9 +20,11 @@ interface MarsalaFogMapProps {
   dailyBountyPoiId: string;
   selectedPoi: PoiDefinition | null;
   navTargetPoi: PoiDefinition | null;
+  walkingRoute: WalkingRouteData | null;
   unlocks: Record<string, UnlockData>;
   justSyncedPoiId: string | null;
   onSelectPoi: (poi: PoiDefinition) => void;
+  onOpenWardrobe: () => void;
   onFitMarsalaTap: () => void;
 }
 
@@ -39,15 +42,34 @@ const FULL_MARSALA_CENTER: [number, number] = [37.813, 12.465];
 const getResponsiveMinZoom = (): number =>
   typeof window !== "undefined" && window.innerWidth < 768 ? 11 : 12;
 
+function computeBearing(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const toDeg = (r: number) => (r * 180) / Math.PI;
+  const φ1 = toRad(lat1);
+  const φ2 = toRad(lat2);
+  const Δλ = toRad(lng2 - lng1);
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x =
+    Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.round(toDeg(Math.atan2(y, x))) + 360) % 360;
+}
+
 export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   gps,
   avatar,
   dailyBountyPoiId,
   selectedPoi,
   navTargetPoi,
+  walkingRoute,
   unlocks,
   justSyncedPoiId,
   onSelectPoi,
+  onOpenWardrobe,
   onFitMarsalaTap,
 }) => {
   const colorContainerRef = useRef<HTMLDivElement | null>(null);
@@ -62,6 +84,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   const poiMarkersRef = useRef(new Map<string, L.Marker>());
   const playerMarkerRef = useRef<L.Marker | null>(null);
   const accuracyCircleRef = useRef<L.Circle | null>(null);
+  const routeShadowRef = useRef<L.Polyline | null>(null);
   const routeLineRef = useRef<L.Polyline | null>(null);
 
   const [rings, setRings] = useState<ScreenCircle[]>([]);
@@ -73,6 +96,9 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
 
   const unlocksRef = useRef(unlocks);
   unlocksRef.current = unlocks;
+
+  const onOpenWardrobeRef = useRef(onOpenWardrobe);
+  onOpenWardrobeRef.current = onOpenWardrobe;
 
   const isMapCompleted = Object.keys(unlocks).length >= MARSALA_POIS.length;
   const showLabels = zoomLevel >= 15;
@@ -275,6 +301,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
       poiMarkersRef.current.clear();
       playerMarkerRef.current = null;
       accuracyCircleRef.current = null;
+      routeShadowRef.current = null;
       routeLineRef.current = null;
     };
   }, []);
@@ -292,31 +319,44 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     });
   }, [selectedPoi]);
 
-  // Linea tratteggiata 8-bit verso il POI puntato dalla Bussola
+  // Percorso stradale pedonale lungo le vie (bordo nero + tratteggio rosso-oro ad alto contrasto)
   useEffect(() => {
     const map = mainMapRef.current;
     if (!map) return;
 
+    if (routeShadowRef.current) {
+      routeShadowRef.current.remove();
+      routeShadowRef.current = null;
+    }
     if (routeLineRef.current) {
       routeLineRef.current.remove();
       routeLineRef.current = null;
     }
 
     if (navTargetPoi && gps.lat !== null && gps.lng !== null) {
-      routeLineRef.current = L.polyline(
-        [
-          [gps.lat, gps.lng],
-          [navTargetPoi.lat, navTargetPoi.lng],
-        ],
-        {
-          color: "#ffd166",
-          weight: 4,
-          dashArray: "8 8",
-          opacity: 0.9,
-        },
-      ).addTo(map);
+      const pathCoords: [number, number][] = walkingRoute?.coordinates ?? [
+        [gps.lat, gps.lng],
+        [navTargetPoi.lat, navTargetPoi.lng],
+      ];
+
+      routeShadowRef.current = L.polyline(pathCoords, {
+        color: "#0b0e1a",
+        weight: 8,
+        opacity: 0.9,
+        lineCap: "square",
+        lineJoin: "miter",
+      }).addTo(map);
+
+      routeLineRef.current = L.polyline(pathCoords, {
+        color: "#ff4d6d",
+        weight: 4,
+        dashArray: "10 10",
+        opacity: 1,
+        lineCap: "square",
+        lineJoin: "miter",
+      }).addTo(map);
     }
-  }, [navTargetPoi, gps.lat, gps.lng]);
+  }, [navTargetPoi, walkingRoute, gps.lat, gps.lng]);
 
   useEffect(() => {
     const map = mainMapRef.current;
@@ -346,7 +386,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
             ? "#9333ea"
             : "#1e293b";
       const border = isTarget
-        ? "#4cc9f0"
+        ? "#ff4d6d"
         : isBounty
           ? "#f0abfc"
           : unlocked
@@ -372,7 +412,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
             margin-top: 3px;
             background: rgba(11, 14, 26, 0.94);
             color: ${unlocked ? "#ffd166" : inRange ? "#38e54d" : "#e2e8f0"};
-            border: 2px solid ${isTarget ? "#4cc9f0" : unlocked ? "#ffd166" : "#000"};
+            border: 2px solid ${isTarget ? "#ff4d6d" : unlocked ? "#ffd166" : "#000"};
             padding: 0px 5px;
             font-family: 'VT323', monospace;
             font-size: 15px;
@@ -440,26 +480,50 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     onSelectPoi,
   ]);
 
-  // Avatar giocatore + Cono visivo di direzione
+  // Avatar giocatore + Cono visivo ad alto contrasto + Click per aprire LOOK
   useEffect(() => {
     const map = mainMapRef.current;
     if (!map || gps.lat === null || gps.lng === null) return;
 
-    const avatarSvg = renderAvatarSvgString(avatar, 34, 42);
-    const coneHtml =
+    const avatarSvg = renderAvatarSvgString(avatar, 36, 44);
+
+    // Angolo del cono: bussola/movimento reale, oppure direzione prossima svolta se Guidami è attivo
+    const fallbackAim =
+      walkingRoute?.nextWaypoint ??
+      (navTargetPoi ? [navTargetPoi.lat, navTargetPoi.lng] : null);
+    const effectiveConeDeg =
       gps.heading !== null
+        ? gps.heading
+        : fallbackAim
+          ? computeBearing(gps.lat, gps.lng, fallbackAim[0], fallbackAim[1])
+          : null;
+
+    const coneHtml =
+      effectiveConeDeg !== null
         ? `<div style="
             position: absolute;
-            top: 50%;
+            top: 24px;
             left: 50%;
-            width: 84px;
-            height: 84px;
-            transform: translate(-50%, -50%) rotate(${gps.heading}deg);
+            width: 96px;
+            height: 96px;
+            transform: translate(-50%, -50%) rotate(${effectiveConeDeg}deg);
             pointer-events: none;
-            z-index: -1;
+            z-index: 1;
           ">
-            <svg viewBox="0 0 84 84" width="84" height="84">
-              <polygon points="42,2 24,42 60,42" fill="rgba(76, 201, 240, 0.36)" stroke="#4cc9f0" stroke-width="1.5" stroke-dasharray="3 2" />
+            <svg viewBox="0 0 96 96" width="96" height="96">
+              <polygon
+                points="48,4 22,48 74,48"
+                fill="rgba(255, 209, 102, 0.45)"
+                stroke="#0b0e1a"
+                stroke-width="2.5"
+              />
+              <polygon
+                points="48,8 30,46 66,46"
+                fill="none"
+                stroke="#ffd166"
+                stroke-width="2"
+                stroke-dasharray="4 3"
+              />
             </svg>
           </div>`
         : "";
@@ -467,28 +531,41 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     const playerIcon = L.divIcon({
       className: "bg-transparent border-0",
       html: `
-        <div style="transform: translate(-50%, -62%); position: relative;" class="flex flex-col items-center">
+        <div
+          style="transform: translate(-50%, -62%); position: relative; cursor: pointer;"
+          class="flex flex-col items-center"
+          title="Tocca per personalizzare il tuo Look"
+        >
           ${coneHtml}
-          ${avatarSvg}
-          <span style="
-            margin-top: -2px;
-            background: #4cc9f0;
-            color: #000;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 7px;
-            padding: 1px 4px;
-            border: 2px solid #000;
-          ">TU</span>
+          <div style="position: relative; z-index: 2;" class="flex flex-col items-center">
+            ${avatarSvg}
+            <span style="
+              margin-top: -2px;
+              background: #4cc9f0;
+              color: #000;
+              font-family: 'Press Start 2P', monospace;
+              font-size: 7px;
+              padding: 1px 4px;
+              border: 2px solid #000;
+              box-shadow: 2px 2px 0 #000;
+            ">TU</span>
+          </div>
         </div>
       `,
       iconSize: [0, 0],
     });
 
     if (!playerMarkerRef.current) {
-      playerMarkerRef.current = L.marker([gps.lat, gps.lng], {
+      const marker = L.marker([gps.lat, gps.lng], {
         icon: playerIcon,
         zIndexOffset: 900,
       }).addTo(map);
+      marker.on("click", () => {
+        sound8bit.click();
+        void gps.requestCompassPermission();
+        onOpenWardrobeRef.current();
+      });
+      playerMarkerRef.current = marker;
     } else {
       playerMarkerRef.current.setLatLng([gps.lat, gps.lng]);
       playerMarkerRef.current.setIcon(playerIcon);
@@ -499,7 +576,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
         radius: gps.accuracy || 20,
         color: "#4cc9f0",
         fillColor: "#4cc9f0",
-        fillOpacity: 0.16,
+        fillOpacity: 0.14,
         weight: 2,
         dashArray: "4 4",
       }).addTo(map);
@@ -507,11 +584,21 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
       accuracyCircleRef.current.setLatLng([gps.lat, gps.lng]);
       accuracyCircleRef.current.setRadius(gps.accuracy || 20);
     }
-  }, [gps.lat, gps.lng, gps.accuracy, gps.heading, avatar]);
+  }, [
+    gps.lat,
+    gps.lng,
+    gps.accuracy,
+    gps.heading,
+    avatar,
+    navTargetPoi,
+    walkingRoute,
+  ]);
 
   const syncedRing = justSyncedPoiId
     ? rings.find((r) => r.id === justSyncedPoiId)
     : null;
+  const zoomControlsBottom =
+    navTargetPoi && !selectedPoi ? "bottom-40" : "bottom-24";
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-[#0b0e1a]">
@@ -558,7 +645,9 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
         className="absolute inset-0 z-20 marsala-main-map"
       />
 
-      <div className="absolute right-2.5 bottom-36 flex flex-col gap-2 z-[600]">
+      <div
+        className={`absolute right-2.5 ${zoomControlsBottom} flex flex-col gap-2 z-[600] transition-all duration-200`}
+      >
         <button
           disabled={zoomLevel >= MAX_ZOOM}
           onClick={() => {
@@ -600,6 +689,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
         <button
           onClick={() => {
             sound8bit.click();
+            void gps.requestCompassPermission();
             if (gps.lat !== null && gps.lng !== null) {
               mainMapRef.current?.setView([gps.lat, gps.lng], 16, {
                 animate: false,

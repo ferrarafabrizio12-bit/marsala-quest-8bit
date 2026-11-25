@@ -185,6 +185,7 @@ export const HudBar: React.FC<HudBarProps> = ({
 };
 
 interface BottomDockProps {
+  topSlot?: React.ReactNode;
   unlockedCount: number;
   prestige: number;
   isCompleted: boolean;
@@ -201,6 +202,7 @@ interface BottomDockProps {
 }
 
 export const BottomDock: React.FC<BottomDockProps> = ({
+  topSlot,
   unlockedCount,
   prestige,
   isCompleted,
@@ -217,6 +219,8 @@ export const BottomDock: React.FC<BottomDockProps> = ({
 }) => (
   <nav className="fixed bottom-0 left-0 right-0 z-[700] pointer-events-none px-1.5 safe-bottom">
     <div className="max-w-xl mx-auto pointer-events-auto flex flex-col gap-1.5">
+      {topSlot}
+
       {(isCompleted || prestige > 0) && (
         <div className="flex gap-1.5">
           <button
