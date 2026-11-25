@@ -165,12 +165,27 @@ function buildDailyBounty(u: UserRecord) {
   };
 }
 
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 function buildSvgFallbackCard(
   poi: (typeof MARSALA_POIS)[number],
   nickname: string,
   isHolo: boolean,
 ): string {
   const border = isHolo ? "#e879f9" : "#ffd166";
+  const safeName = escapeXml(poi.name.slice(0, 28));
+  const safeZone = escapeXml(poi.zone.slice(0, 38));
+  const safeDesc = escapeXml(poi.shortDesc.slice(0, 52));
+  const safeNick = escapeXml(nickname);
+  const safeIcon = escapeXml(poi.icon);
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="540" height="780" viewBox="0 0 540 780">
     <rect width="540" height="780" fill="#0b0e1a"/>
     <rect x="8" y="8" width="524" height="764" fill="none" stroke="${border}" stroke-width="14"/>
@@ -178,11 +193,11 @@ function buildSvgFallbackCard(
     <text x="36" y="56" fill="${border}" font-family="monospace" font-size="18" font-weight="bold">MARSALA-DEX CARD</text>
     <rect x="36" y="74" width="468" height="340" fill="#1e1b4b" stroke="#f4f1de" stroke-width="4"/>
     <circle cx="420" cy="150" r="32" fill="#ffd166"/>
-    <text x="270" y="265" text-anchor="middle" font-size="92">${poi.icon}</text>
-    <text x="36" y="458" fill="#ffd166" font-family="monospace" font-size="22" font-weight="bold">${poi.name.slice(0, 28)}</text>
-    <text x="36" y="486" fill="#4cc9f0" font-family="monospace" font-size="17">${poi.zone.slice(0, 38)}</text>
-    <text x="36" y="530" fill="#f4f1de" font-family="monospace" font-size="14">${poi.shortDesc.slice(0, 52)}</text>
-    <text x="36" y="680" fill="#e2e8f0" font-family="monospace" font-size="16">PLAYER: ${nickname}</text>
+    <text x="270" y="265" text-anchor="middle" font-size="92">${safeIcon}</text>
+    <text x="36" y="458" fill="#ffd166" font-family="monospace" font-size="22" font-weight="bold">${safeName}</text>
+    <text x="36" y="486" fill="#4cc9f0" font-family="monospace" font-size="17">${safeZone}</text>
+    <text x="36" y="530" fill="#f4f1de" font-family="monospace" font-size="14">${safeDesc}</text>
+    <text x="36" y="680" fill="#e2e8f0" font-family="monospace" font-size="16">PLAYER: ${safeNick}</text>
     <text x="36" y="710" fill="#94a3b8" font-family="monospace" font-size="15">GPS: ${poi.lat.toFixed(5)}, ${poi.lng.toFixed(5)}</text>
   </svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
@@ -227,7 +242,6 @@ app.get("/api/map-tile/:z/:x/:yPng", async (req: Request, res: Response) => {
     return;
   }
 
-  // Server OpenStreetMap aperti (nessuna API key e nessun segnaposto bianco)
   const sources = [
     `https://tile.openstreetmap.de/${z}/${x}/${y}.png`,
     `https://a.tile.openstreetmap.fr/osmfr/${z}/${x}/${y}.png`,
@@ -255,7 +269,6 @@ app.get("/api/map-tile/:z/:x/:yPng", async (req: Request, res: Response) => {
 
       const arrBuf = await upstream.arrayBuffer();
       const buf = Buffer.from(arrBuf);
-      // Scarta eventuali segnaposto vuoti o risposte troppo piccole
       if (buf.length < 6500) continue;
 
       if (tileCache.size >= 500) {

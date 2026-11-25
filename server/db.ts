@@ -77,6 +77,21 @@ function sanitizeEdition(raw: unknown): CardEdition {
   return "standard";
 }
 
+function sanitizeStoredPhotoUrl(rawUrl: string): string {
+  const prefix = "data:image/svg+xml;charset=utf-8,";
+  if (!rawUrl.startsWith(prefix)) return rawUrl;
+  try {
+    const decoded = decodeURIComponent(rawUrl.slice(prefix.length));
+    const fixedXml = decoded.replace(
+      /&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)/g,
+      "&amp;",
+    );
+    return `${prefix}${encodeURIComponent(fixedXml)}`;
+  } catch {
+    return rawUrl;
+  }
+}
+
 function mapUserRow(r: Record<string, unknown>): UserRecord {
   return {
     id: String(r.id),
@@ -290,7 +305,7 @@ export async function getUserUnlocks(
   for (const r of rows) {
     map[r.poi_id] = {
       poiId: r.poi_id,
-      photoDataUrl: r.photo_data_url,
+      photoDataUrl: sanitizeStoredPhotoUrl(String(r.photo_data_url)),
       lat: Number(r.lat),
       lng: Number(r.lng),
       accuracy: Number(r.accuracy),
@@ -347,7 +362,7 @@ export async function upsertUnlock(
   const r = rows[0];
   return {
     poiId: r.poi_id,
-    photoDataUrl: r.photo_data_url,
+    photoDataUrl: sanitizeStoredPhotoUrl(String(r.photo_data_url)),
     lat: Number(r.lat),
     lng: Number(r.lng),
     accuracy: Number(r.accuracy),
