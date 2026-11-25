@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { MARSALA_BOUNDS, MARSALA_POIS } from "../../shared/pois";
+import { MARSALA_POIS } from "../../shared/pois";
 import { getTitleById } from "../../shared/cosmetics";
 import type { UnlockData, UserProfile } from "../types/game";
 import { renderAvatarSvgString } from "../utils/avatarPixels";
@@ -14,155 +14,140 @@ interface TravelPostcardModalProps {
   onClose: () => void;
 }
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+const API_BASE = (import.meta.env.VITE_API_URL || "")
+  .trim()
+  .replace(/\/+$/, "");
+
+function loadImage(
+  src: string,
+  crossOrigin?: string,
+): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    if (crossOrigin) img.crossOrigin = crossOrigin;
     img.onload = () => resolve(img);
     img.onerror = reject;
     img.src = src;
   });
 }
 
+function lngToTileX(lng: number, zoom: number): number {
+  return ((lng + 180) / 360) * Math.pow(2, zoom);
+}
+
+function latToTileY(lat: number, zoom: number): number {
+  const rad = (lat * Math.PI) / 180;
+  return (
+    ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) *
+    Math.pow(2, zoom)
+  );
+}
+
 /**
- * Disegna la mappa cartografica 8-bit completa di Marsala (terraferma, Stagnone, Isola Longa,
- * Mozia, Capo Boeo, arterie stradali e puzzle Voronoi colorato per i POI sbloccati).
- * 100% locale su canvas: zero riquadri bianchi o blocchi CORS su iOS/Android.
+ * Renderizza la mappa reale di Marsala (tasselli proxy CORS-safe + puzzle Voronoi
+ * colorato per i POI sbloccati / grigio per i POI mancanti + i 20 marker).
  */
-function renderMarsalaCartographicMap(
+async function renderMarsalaRealMapSnapshot(
   width: number,
   height: number,
   unlocks: Record<string, UnlockData>,
-): HTMLCanvasElement {
+): Promise<HTMLCanvasElement> {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d")!;
 
-  const [[southLat, westLng], [northLat, eastLng]] = MARSALA_BOUNDS;
-  const cosLat = Math.cos((37.81 * Math.PI) / 180);
-  const rawW = (eastLng - westLng) * cosLat;
-  const rawH = northLat - southLat;
-
-  const pad = 26;
-  const scale = Math.min((width - pad * 2) / rawW, (height - pad * 2) / rawH);
-  const offsetX = (width - rawW * scale) / 2;
-  const offsetY = (height - rawH * scale) / 2;
-
-  const project = (lat: number, lng: number) => ({
-    x: offsetX + (lng - westLng) * cosLat * scale,
-    y: offsetY + (northLat - lat) * scale,
-  });
-
-  // 1. Mare Mediterraneo & Laguna dello Stagnone
-  const seaGrad = ctx.createLinearGradient(0, 0, width, height);
-  seaGrad.addColorStop(0, "#092442");
-  seaGrad.addColorStop(1, "#06172b");
-  ctx.fillStyle = seaGrad;
+  ctx.fillStyle = "#0b192c";
   ctx.fillRect(0, 0, width, height);
 
-  // Griglia nautica 8-bit
-  ctx.strokeStyle = "rgba(76, 201, 240, 0.12)";
-  ctx.lineWidth = 1.5;
-  for (let gx = 0; gx < width; gx += 40) {
-    ctx.beginPath();
-    ctx.moveTo(gx, 0);
-    ctx.lineTo(gx, height);
-    ctx.stroke();
+  // Calcola il rettangolo dei POI di Marsala e adatta l'ampiezza al formato 928x660 (zero bande vuote)
+  const lats = MARSALA_POIS.map((p) => p.lat);
+  const lngs = MARSALA_POIS.map((p) => p.lng);
+  const minLat = Math.min(...lats) - 0.012;
+  const maxLat = Math.max(...lats) + 0.012;
+  const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+
+  const zoom = 13;
+  const topTy = latToTileY(maxLat, zoom);
+  const bottomTy = latToTileY(minLat, zoom);
+  const spanY = bottomTy - topTy;
+  const spanX = spanY * (width / height);
+
+  const centerTx = lngToTileX(centerLng, zoom);
+  const leftTx = centerTx - spanX / 2;
+  const rightTx = centerTx + spanX / 2;
+
+  const tilePxSize = width / spanX;
+
+  const projectLatLng = (lat: number, lng: number) => ({
+    x: (lngToTileX(lng, zoom) - leftTx) * tilePxSize,
+    y: (latToTileY(lat, zoom) - topTy) * tilePxSize,
+  });
+
+  // 1. Scarica e disegna i tasselli reali della mappa di Marsala tramite il proxy backend
+  const startTx = Math.floor(leftTx);
+  const endTx = Math.floor(rightTx);
+  const startTy = Math.floor(topTy);
+  const endTy = Math.floor(bottomTy);
+
+  const tileJobs: Array<
+    Promise<{ img: HTMLImageElement; tx: number; ty: number } | null>
+  > = [];
+
+  for (let tx = startTx; tx <= endTx; tx++) {
+    for (let ty = startTy; ty <= endTy; ty++) {
+      const tileUrl = `${API_BASE}/api/map-tile/${zoom}/${tx}/${ty}.png`;
+      tileJobs.push(
+        loadImage(tileUrl, "anonymous")
+          .then((img) => ({ img, tx, ty }))
+          .catch(() => null),
+      );
+    }
   }
-  for (let gy = 0; gy < height; gy += 40) {
-    ctx.beginPath();
-    ctx.moveTo(0, gy);
-    ctx.lineTo(width, gy);
-    ctx.stroke();
+
+  const tiles = await Promise.all(tileJobs);
+
+  ctx.save();
+  ctx.filter = "saturate(1.25) contrast(1.06)";
+  for (const t of tiles) {
+    if (!t) continue;
+    const dx = (t.tx - leftTx) * tilePxSize;
+    const dy = (t.ty - topTy) * tilePxSize;
+    ctx.drawImage(t.img, dx, dy, tilePxSize + 0.8, tilePxSize + 0.8);
   }
+  ctx.restore();
 
-  // 2. Poligono terraferma di Marsala (da Torre San Teodoro fino a Petrosino/Torrazza)
-  const mainlandCoords: [number, number][] = [
-    [37.902, 12.467],
-    [37.902, 12.548],
-    [37.718, 12.548],
-    [37.718, 12.482],
-    [37.734, 12.478],
-    [37.752, 12.467],
-    [37.768, 12.458],
-    [37.783, 12.444],
-    [37.793, 12.435],
-    [37.801, 12.425],
-    [37.812, 12.436],
-    [37.824, 12.456],
-    [37.832, 12.467],
-    [37.848, 12.466],
-    [37.868, 12.474],
-    [37.884, 12.465],
-  ];
-
-  const isolaLongaCoords: [number, number][] = [
-    [37.884, 12.454],
-    [37.872, 12.457],
-    [37.854, 12.447],
-    [37.846, 12.442],
-    [37.852, 12.436],
-    [37.872, 12.445],
-  ];
-
-  const moziaCoords: [number, number][] = [
-    [37.872, 12.466],
-    [37.871, 12.471],
-    [37.865, 12.471],
-    [37.865, 12.465],
-  ];
-
-  const tracePoly = (coords: [number, number][]) => {
-    ctx.beginPath();
-    coords.forEach(([lat, lng], i) => {
-      const pt = project(lat, lng);
-      if (i === 0) ctx.moveTo(pt.x, pt.y);
-      else ctx.lineTo(pt.x, pt.y);
-    });
-    ctx.closePath();
-  };
-
-  // Terra base
-  ctx.fillStyle = "#1e3a2f";
-  tracePoly(mainlandCoords);
-  ctx.fill();
-
-  ctx.fillStyle = "#254739";
-  tracePoly(isolaLongaCoords);
-  ctx.fill();
-  tracePoly(moziaCoords);
-  ctx.fill();
-
-  // 3. Puzzle Voronoi colorato sulle zone sbloccate della cartolina
+  // 2. Applica il Puzzle Voronoi: tessere sbloccate a colori, tessere mancanti in grigio
   const unlockedCount = Object.keys(unlocks).length;
-  if (unlockedCount > 0) {
+  if (unlockedCount < MARSALA_POIS.length) {
     const step = 4;
     const gw = Math.ceil(width / step);
     const gh = Math.ceil(height / step);
-    const puzzleCanvas = document.createElement("canvas");
-    puzzleCanvas.width = gw;
-    puzzleCanvas.height = gh;
-    const pctx = puzzleCanvas.getContext("2d")!;
-    const pImg = pctx.createImageData(gw, gh);
-    const pData = pImg.data;
+
+    const fogCanvas = document.createElement("canvas");
+    fogCanvas.width = gw;
+    fogCanvas.height = gh;
+    const fctx = fogCanvas.getContext("2d")!;
+    const imgData = fctx.createImageData(gw, gh);
+    const data = imgData.data;
 
     const count = MARSALA_POIS.length;
     const pxArr = new Float32Array(count);
     const pyArr = new Float32Array(count);
     const unlArr = new Uint8Array(count);
-    const holoArr = new Uint8Array(count);
 
     for (let i = 0; i < count; i++) {
       const p = MARSALA_POIS[i];
-      const pt = project(p.lat, p.lng);
+      const pt = projectLatLng(p.lat, p.lng);
       pxArr[i] = pt.x / step;
       pyArr[i] = pt.y / step;
-      const u = unlocks[p.id];
-      unlArr[i] = u ? 1 : 0;
-      holoArr[i] = u?.isHolo ? 1 : 0;
+      unlArr[i] = unlocks[p.id] ? 1 : 0;
     }
 
+    const ownerGrid = new Int16Array(gw * gh);
+
     for (let y = 0; y < gh; y++) {
+      const rowOffset = y * gw;
       for (let x = 0; x < gw; x++) {
         let bestIdx = 0;
         let bestDist = Infinity;
@@ -175,99 +160,62 @@ function renderMarsalaCartographicMap(
             bestIdx = i;
           }
         }
-        const idx = (y * gw + x) * 4;
+        ownerGrid[rowOffset + x] = bestIdx;
+        const pIdx = (rowOffset + x) * 4;
         if (unlArr[bestIdx]) {
-          if (holoArr[bestIdx]) {
-            pData[idx] = 217;
-            pData[idx + 1] = 70;
-            pData[idx + 2] = 239;
-            pData[idx + 3] = 85;
-          } else {
-            pData[idx] = 56;
-            pData[idx + 1] = 229;
-            pData[idx + 2] = 77;
-            pData[idx + 3] = 85;
-          }
+          data[pIdx] = 0;
+          data[pIdx + 1] = 0;
+          data[pIdx + 2] = 0;
+          data[pIdx + 3] = 0;
+        } else {
+          data[pIdx] = 128;
+          data[pIdx + 1] = 128;
+          data[pIdx + 2] = 128;
+          data[pIdx + 3] = 255;
         }
       }
     }
 
-    pctx.putImageData(pImg, 0, 0);
-    ctx.drawImage(puzzleCanvas, 0, 0, gw, gh, 0, 0, width, height);
+    fctx.putImageData(imgData, 0, 0);
+
+    ctx.save();
+    ctx.globalCompositeOperation = "color";
+    ctx.drawImage(fogCanvas, 0, 0, gw, gh, 0, 0, width, height);
+    ctx.restore();
+
+    // Bordi dorati tra le tessere del puzzle sbloccate e quelle ancora grigie
+    if (unlockedCount > 0) {
+      ctx.save();
+      ctx.fillStyle = "rgba(255, 209, 102, 0.55)";
+      for (let y = 1; y < gh; y++) {
+        const rowOffset = y * gw;
+        for (let x = 1; x < gw; x++) {
+          const cur = ownerGrid[rowOffset + x];
+          const left = ownerGrid[rowOffset + x - 1];
+          const up = ownerGrid[rowOffset - gw + x];
+          if (
+            (cur !== left && unlArr[cur] !== unlArr[left]) ||
+            (cur !== up && unlArr[cur] !== unlArr[up])
+          ) {
+            ctx.fillRect(x * step, y * step, step, step);
+          }
+        }
+      }
+      ctx.restore();
+    }
   }
 
-  // Bordo costa dorato 8-bit
-  ctx.strokeStyle = "#ffd166";
-  ctx.lineWidth = 3.5;
-  tracePoly(mainlandCoords);
-  ctx.stroke();
-
-  ctx.strokeStyle = "#4cc9f0";
-  ctx.lineWidth = 2.5;
-  tracePoly(isolaLongaCoords);
-  ctx.stroke();
-  tracePoly(moziaCoords);
-  ctx.stroke();
-
-  // 4. Strade principali di Marsala (SP21, Via Mazara, SS115, Centro)
-  const roads: [number, number][][] = [
-    // SP21 Lungomare dello Stagnone -> Centro
-    [
-      [37.882, 12.466],
-      [37.855, 12.467],
-      [37.83, 12.467],
-      [37.812, 12.448],
-      [37.798, 12.437],
-    ],
-    // Via Mazara -> Lido Signorino -> Torrazza
-    [
-      [37.798, 12.437],
-      [37.783, 12.446],
-      [37.768, 12.46],
-      [37.751, 12.47],
-      [37.73, 12.482],
-    ],
-    // SS115 verso Trapani
-    [
-      [37.801, 12.442],
-      [37.828, 12.488],
-      [37.865, 12.515],
-    ],
-  ];
-
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
-  ctx.lineWidth = 3;
-  ctx.setLineDash([6, 4]);
-  for (const road of roads) {
-    ctx.beginPath();
-    road.forEach(([lat, lng], i) => {
-      const pt = project(lat, lng);
-      if (i === 0) ctx.moveTo(pt.x, pt.y);
-      else ctx.lineTo(pt.x, pt.y);
-    });
-    ctx.stroke();
-  }
-  ctx.setLineDash([]);
-
-  // Etichette geografiche
-  ctx.fillStyle = "rgba(148, 163, 184, 0.75)";
-  ctx.font = "bold 17px monospace";
-  const stagnonePos = project(37.862, 12.456);
-  ctx.fillText("STAGNONE", stagnonePos.x - 45, stagnonePos.y);
-  const capoPos = project(37.801, 12.425);
-  ctx.fillText("CAPO BOEO", capoPos.x - 10, capoPos.y - 14);
-
-  // 5. Tutti i 20 marker POI sopra la mappa
+  // 3. Disegna tutti i 20 marker POI sopra la mappa
   for (const poi of MARSALA_POIS) {
     const u = unlocks[poi.id];
-    const pt = project(poi.lat, poi.lng);
+    const pt = projectLatLng(poi.lat, poi.lng);
 
     if (u) {
       ctx.fillStyle = u.isHolo ? "#e879f9" : "#ffd166";
       ctx.strokeStyle = "#000000";
       ctx.lineWidth = 3;
-      ctx.fillRect(pt.x - 10, pt.y - 10, 20, 20);
-      ctx.strokeRect(pt.x - 10, pt.y - 10, 20, 20);
+      ctx.fillRect(pt.x - 11, pt.y - 11, 22, 22);
+      ctx.strokeRect(pt.x - 11, pt.y - 11, 22, 22);
 
       ctx.fillStyle = "#000000";
       ctx.font = "bold 14px monospace";
@@ -276,14 +224,14 @@ function renderMarsalaCartographicMap(
     } else {
       ctx.fillStyle = "#1e293b";
       ctx.strokeStyle = "#94a3b8";
-      ctx.lineWidth = 2;
-      ctx.fillRect(pt.x - 8, pt.y - 8, 16, 16);
-      ctx.strokeRect(pt.x - 8, pt.y - 8, 16, 16);
+      ctx.lineWidth = 2.5;
+      ctx.fillRect(pt.x - 9, pt.y - 9, 18, 18);
+      ctx.strokeRect(pt.x - 9, pt.y - 9, 18, 18);
 
       ctx.fillStyle = "#ffd166";
-      ctx.font = "bold 12px monospace";
+      ctx.font = "bold 13px monospace";
       ctx.textAlign = "center";
-      ctx.fillText("?", pt.x, pt.y + 4);
+      ctx.fillText("?", pt.x, pt.y + 5);
     }
   }
 
@@ -437,13 +385,17 @@ export const TravelPostcardModal: React.FC<TravelPostcardModalProps> = ({
         434,
       );
 
-      // Mappa 8-bit completa di Marsala con puzzle colorato
+      // Mappa reale di Marsala con tasselli cartografici + puzzle colorato
       const mapX = 76;
       const mapY = 486;
       const mapW = W - 152;
       const mapH = 660;
 
-      const mapSnapshot = renderMarsalaCartographicMap(mapW, mapH, unlocks);
+      const mapSnapshot = await renderMarsalaRealMapSnapshot(
+        mapW,
+        mapH,
+        unlocks,
+      );
       ctx.drawImage(mapSnapshot, mapX, mapY, mapW, mapH);
 
       ctx.strokeStyle = "#4cc9f0";

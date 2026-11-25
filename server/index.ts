@@ -188,6 +188,81 @@ function buildSvgFallbackCard(
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+// --- CACHE & PROXY TASSELLI MAPPA DI MARSALA PER CARTOLINA DI VIAGGIO ---
+const tileCache = new Map<string, Buffer>();
+
+function isValidMarsalaTile(z: number, x: number, y: number): boolean {
+  if (!Number.isInteger(z) || !Number.isInteger(x) || !Number.isInteger(y))
+    return false;
+  if (z < 10 || z > 16) return false;
+  const n = Math.pow(2, z);
+  if (x < 0 || x >= n || y < 0 || y >= n) return false;
+
+  const tileLng = (x / n) * 360 - 180;
+  const latRad = Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n)));
+  const tileLat = (latRad * 180) / Math.PI;
+
+  return (
+    tileLng >= 12.1 && tileLng <= 12.8 && tileLat >= 37.55 && tileLat <= 38.05
+  );
+}
+
+app.get("/api/map-tile/:z/:x/:yPng", async (req: Request, res: Response) => {
+  const z = Number(req.params.z);
+  const x = Number(req.params.x);
+  const y = Number(String(req.params.yPng || "").replace(/\.png$/i, ""));
+
+  if (!isValidMarsalaTile(z, x, y)) {
+    res.status(400).json({ error: "Coordinate tassello fuori area Marsala." });
+    return;
+  }
+
+  const key = `${z}/${x}/${y}`;
+  const cached = tileCache.get(key);
+  if (cached) {
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.send(cached);
+    return;
+  }
+
+  const sources = [
+    `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png`,
+    `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
+  ];
+
+  for (const url of sources) {
+    try {
+      const upstream = await fetch(url, {
+        headers: {
+          "User-Agent":
+            "MarsalaQuest8Bit/1.0 (+https://marsala-quest-8bit.vercel.app)",
+          Accept: "image/png,image/*;q=0.8",
+        },
+      });
+      if (!upstream.ok) continue;
+      const arrBuf = await upstream.arrayBuffer();
+      const buf = Buffer.from(arrBuf);
+      if (buf.length < 100) continue;
+
+      if (tileCache.size >= 400) {
+        const firstKey = tileCache.keys().next().value;
+        if (firstKey) tileCache.delete(firstKey);
+      }
+      tileCache.set(key, buf);
+
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.send(buf);
+      return;
+    } catch {
+      // Prova sorgente successiva
+    }
+  }
+
+  res.status(502).json({ error: "Tassello mappa non disponibile." });
+});
+
 app.get("/api/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", service: "marsala-quest-8bit-api" });
 });
