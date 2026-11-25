@@ -5,7 +5,6 @@ import {
   MARSALA_CENTER,
   MARSALA_POIS,
   type PoiDefinition,
-  getAdaptiveFogRadiusMeters,
   haversineMeters,
 } from "../../shared/pois";
 import type { AvatarConfig } from "../../shared/cosmetics";
@@ -18,10 +17,12 @@ import { sound8bit } from "../utils/sound8bit";
 interface MarsalaFogMapProps {
   gps: RealGpsState;
   avatar: AvatarConfig;
+  prestige: number;
   dailyBountyPoiId: string;
   selectedPoi: PoiDefinition | null;
   navTargetPoi: PoiDefinition | null;
   walkingRoute: WalkingRouteData | null;
+  onlyMissing: boolean;
   unlocks: Record<string, UnlockData>;
   justSyncedPoiId: string | null;
   onSelectPoi: (poi: PoiDefinition) => void;
@@ -32,7 +33,6 @@ interface MarsalaFogMapProps {
 interface SyncPulse {
   x: number;
   y: number;
-  r: number;
 }
 
 const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -62,10 +62,12 @@ function computeBearing(
 export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   gps,
   avatar,
+  prestige,
   dailyBountyPoiId,
   selectedPoi,
   navTargetPoi,
   walkingRoute,
+  onlyMissing,
   unlocks,
   justSyncedPoiId,
   onSelectPoi,
@@ -75,6 +77,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   const colorContainerRef = useRef<HTMLDivElement | null>(null);
   const mainContainerRef = useRef<HTMLDivElement | null>(null);
   const fogCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const offscreenPuzzleRef = useRef<HTMLCanvasElement | null>(null);
 
   const colorMapRef = useRef<L.Map | null>(null);
   const mainMapRef = useRef<L.Map | null>(null);
@@ -100,7 +103,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   const isMapCompleted = Object.keys(unlocks).length >= MARSALA_POIS.length;
   const showLabels = zoomLevel >= 15;
 
-  // Disegna direttamente sul canvas GPU in mix-blend-mode: color (zero toDataURL, zero flicker)
+  // Sistema Puzzle di Voronoi: ogni pixel appartiene al POI più vicino; due pezzi adiacenti si saldano senza buchi grigi
   const drawFogCanvasAndSync = () => {
     const mainMap = mainMapRef.current;
     const colorMap = colorMapRef.current;
@@ -133,56 +136,113 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     const currentUnlocks = unlocksRef.current;
     const unlockedCount = Object.keys(currentUnlocks).length;
 
-    // Se tutti i 20 POI sono sbloccati, l'intera mappa resta a colori
+    // 20/20 sbloccati: tutti i pezzi del puzzle sono uniti e l'intera mappa è a colori
     if (unlockedCount >= MARSALA_POIS.length) {
       return;
     }
 
-    // Copertura grigia uniforme su tutta la mappa inesplorata
-    ctx.fillStyle = "rgb(128, 128, 128)";
-    ctx.fillRect(0, 0, size.x, size.y);
-
+    // 0/20 sbloccati: tutta la mappa è ancora grigia
     if (unlockedCount === 0) {
+      ctx.fillStyle = "rgb(128, 128, 128)";
+      ctx.fillRect(0, 0, size.x, size.y);
       return;
     }
 
-    // Sottrae le aree dei POI sbloccati con sfumatura morbida (senza cerchi tratteggiati)
-    ctx.globalCompositeOperation = "destination-out";
+    // Calcolo tassellatura Voronoi su griglia veloce 4px (zero lag, zero buchi tra pezzi vicini)
+    const step = 4;
+    const gw = Math.max(1, Math.ceil(size.x / step));
+    const gh = Math.max(1, Math.ceil(size.y / step));
 
-    for (const poi of MARSALA_POIS) {
-      if (!currentUnlocks[poi.id]) continue;
-
-      const pt = mainMap.latLngToContainerPoint([poi.lat, poi.lng]);
-      const metersPerPixel =
-        (156543.03392 * Math.cos((poi.lat * Math.PI) / 180)) /
-        Math.pow(2, zoom);
-      const radiusMeters = getAdaptiveFogRadiusMeters(poi);
-      const r = radiusMeters / metersPerPixel;
-
-      if (
-        pt.x + r < 0 ||
-        pt.x - r > size.x ||
-        pt.y + r < 0 ||
-        pt.y - r > size.y
-      ) {
-        continue;
-      }
-
-      const grad = ctx.createRadialGradient(
-        pt.x,
-        pt.y,
-        r * 0.68,
-        pt.x,
-        pt.y,
-        r,
-      );
-      grad.addColorStop(0, "rgba(0, 0, 0, 1)");
-      grad.addColorStop(1, "rgba(0, 0, 0, 0)");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
-      ctx.fill();
+    if (!offscreenPuzzleRef.current) {
+      offscreenPuzzleRef.current = document.createElement("canvas");
     }
+    const off = offscreenPuzzleRef.current;
+    if (off.width !== gw || off.height !== gh) {
+      off.width = gw;
+      off.height = gh;
+    }
+
+    const octx = off.getContext("2d");
+    if (!octx) return;
+
+    const imgData = octx.createImageData(gw, gh);
+    const data = imgData.data;
+
+    const count = MARSALA_POIS.length;
+    const poiX = new Float32Array(count);
+    const poiY = new Float32Array(count);
+    const poiUnlocked = new Uint8Array(count);
+
+    for (let i = 0; i < count; i++) {
+      const p = MARSALA_POIS[i];
+      const pt = mainMap.latLngToContainerPoint([p.lat, p.lng]);
+      poiX[i] = pt.x / step;
+      poiY[i] = pt.y / step;
+      poiUnlocked[i] = currentUnlocks[p.id] ? 1 : 0;
+    }
+
+    const ownerGrid = new Int16Array(gw * gh);
+
+    for (let y = 0; y < gh; y++) {
+      const rowOffset = y * gw;
+      for (let x = 0; x < gw; x++) {
+        let bestIdx = 0;
+        let bestDist = Infinity;
+
+        for (let i = 0; i < count; i++) {
+          const dx = x - poiX[i];
+          const dy = y - poiY[i];
+          const distSq = dx * dx + dy * dy;
+          if (distSq < bestDist) {
+            bestDist = distSq;
+            bestIdx = i;
+          }
+        }
+
+        ownerGrid[rowOffset + x] = bestIdx;
+        const pIdx = (rowOffset + x) * 4;
+
+        if (poiUnlocked[bestIdx]) {
+          // Tessera sbloccata: trasparente per far emergere la mappa a colori sottostante
+          data[pIdx] = 0;
+          data[pIdx + 1] = 0;
+          data[pIdx + 2] = 0;
+          data[pIdx + 3] = 0;
+        } else {
+          // Tessera ancora da sbloccare: grigio neutro (desatura i colori sottostanti)
+          data[pIdx] = 128;
+          data[pIdx + 1] = 128;
+          data[pIdx + 2] = 128;
+          data[pIdx + 3] = 255;
+        }
+      }
+    }
+
+    octx.putImageData(imgData, 0, 0);
+
+    // Applica il puzzle con interpolazione morbida sui bordi
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(off, 0, 0, gw, gh, 0, 0, size.x, size.y);
+
+    // Evidenzia delicatamente le linee di incastro tra tessere sbloccate e tessere ancora grigie
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "rgba(255, 209, 102, 0.35)";
+    for (let y = 1; y < gh; y++) {
+      const rowOffset = y * gw;
+      for (let x = 1; x < gw; x++) {
+        const cur = ownerGrid[rowOffset + x];
+        const left = ownerGrid[rowOffset + x - 1];
+        const up = ownerGrid[rowOffset - gw + x];
+        if (
+          (cur !== left && poiUnlocked[cur] !== poiUnlocked[left]) ||
+          (cur !== up && poiUnlocked[cur] !== poiUnlocked[up])
+        ) {
+          ctx.fillRect(x * step, y * step, step, step);
+        }
+      }
+    }
+    ctx.restore();
   };
 
   useEffect(() => {
@@ -339,15 +399,27 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     }
   }, [navTargetPoi, walkingRoute, gps.lat, gps.lng]);
 
+  // Gestione Marker POI (rispetta il filtro permanente "Solo mancanti")
   useEffect(() => {
     const map = mainMapRef.current;
     if (!map) return;
 
     MARSALA_POIS.forEach((poi) => {
       const unlocked = Boolean(unlocks[poi.id]);
+      const isTarget = navTargetPoi?.id === poi.id;
+      const existing = poiMarkersRef.current.get(poi.id);
+
+      // Se il filtro "Solo mancanti" è attivo, nascondi sulla mappa i POI già conquistati (tranne se puntato dalla bussola)
+      if (onlyMissing && unlocked && !isTarget) {
+        if (existing) {
+          existing.remove();
+          poiMarkersRef.current.delete(poi.id);
+        }
+        return;
+      }
+
       const isHolo = Boolean(unlocks[poi.id]?.isHolo);
       const isBounty = poi.id === dailyBountyPoiId;
-      const isTarget = navTargetPoi?.id === poi.id;
 
       const dist =
         gps.lat !== null && gps.lng !== null
@@ -430,7 +502,6 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
         iconSize: [0, 0],
       });
 
-      const existing = poiMarkersRef.current.get(poi.id);
       if (existing) {
         existing.setIcon(icon);
         existing.setZIndexOffset(
@@ -452,6 +523,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     });
   }, [
     unlocks,
+    onlyMissing,
     gps.lat,
     gps.lng,
     gps.accuracy,
@@ -584,19 +656,13 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
         syncedPoi.lat,
         syncedPoi.lng,
       ]);
-      const metersPerPixel =
-        (156543.03392 * Math.cos((syncedPoi.lat * Math.PI) / 180)) /
-        Math.pow(2, zoomLevel);
-      syncPulse = {
-        x: pt.x,
-        y: pt.y,
-        r: getAdaptiveFogRadiusMeters(syncedPoi) / metersPerPixel,
-      };
+      syncPulse = { x: pt.x, y: pt.y };
     }
   }
 
   const hasCompassBar = Boolean(navTargetPoi && !selectedPoi);
-  const baseBottomPx = isMapCompleted ? 118 : 80;
+  const hasMedalRow = isMapCompleted || prestige > 0;
+  const baseBottomPx = hasMedalRow ? 118 : 80;
   const controlsBottomPx = hasCompassBar ? baseBottomPx + 88 : baseBottomPx;
 
   return (
@@ -610,20 +676,20 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
         className="absolute inset-0 z-0 pointer-events-none marsala-color-map"
       />
 
-      {/* Nebbia grigia sincronizzata su GPU senza flicker */}
+      {/* Puzzle Voronoi sincronizzato su GPU (tessera sbloccata = colore, mancante = grigio) */}
       <canvas
         ref={fogCanvasRef}
         style={{ mixBlendMode: "color" }}
         className="absolute inset-0 w-full h-full z-10 pointer-events-none"
       />
 
-      {/* Onda d'urto momentanea solo all'atto dello sblocco */}
+      {/* Onda d'urto momentanea all'atto dello sblocco */}
       {syncPulse && (
         <svg className="absolute inset-0 w-full h-full z-[15] pointer-events-none">
           <circle
             cx={syncPulse.x}
             cy={syncPulse.y}
-            r={syncPulse.r * 0.65}
+            r={72}
             fill="none"
             stroke="#ffd166"
             strokeWidth="6"

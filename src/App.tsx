@@ -82,6 +82,13 @@ export default function App() {
   const [showPrestigeConfirm, setShowPrestigeConfirm] = useState(false);
   const [activatingPrestige, setActivatingPrestige] = useState(false);
 
+  const [sortByNearest, setSortByNearest] = useState<boolean>(
+    () => localStorage.getItem("marsala_filter_nearest") === "1",
+  );
+  const [onlyMissing, setOnlyMissing] = useState<boolean>(
+    () => localStorage.getItem("marsala_filter_only_missing") === "1",
+  );
+
   const [theme, setTheme] = useState<RetroTheme>("default");
   const [crtEnabled, setCrtEnabled] = useState(true);
   const [muted, setMuted] = useState(false);
@@ -102,6 +109,22 @@ export default function App() {
   const unlockedCount = Object.keys(unlocks).length;
   const isCompleted = unlockedCount >= MARSALA_POIS.length;
   const editionsOwned = Object.values(unlocks).map((u) => u.edition);
+
+  const toggleSortByNearest = useCallback(() => {
+    setSortByNearest((prev) => {
+      const next = !prev;
+      localStorage.setItem("marsala_filter_nearest", next ? "1" : "0");
+      return next;
+    });
+  }, []);
+
+  const toggleOnlyMissing = useCallback(() => {
+    setOnlyMissing((prev) => {
+      const next = !prev;
+      localStorage.setItem("marsala_filter_only_missing", next ? "1" : "0");
+      return next;
+    });
+  }, []);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -494,21 +517,25 @@ export default function App() {
         unlockedCount={unlockedCount}
         totalXp={totalXp}
         dailyBounty={dailyBounty}
+        onlyMissing={onlyMissing}
         gps={gps}
         onTitleTap={handleTitleTap}
         onSkyTap={handleSkyTap}
         onRadarTap={handleRadarTap}
         onProgressTap={handleProgressTap}
+        onToggleOnlyMissing={toggleOnlyMissing}
         onSelectBountyPoi={setSelectedPoi}
       />
 
       <MarsalaFogMap
         gps={gps}
         avatar={user.avatar}
+        prestige={user.prestige}
         dailyBountyPoiId={dailyBounty.poiId}
         selectedPoi={selectedPoi}
         navTargetPoi={navTargetPoi}
         walkingRoute={walkingRoute}
+        onlyMissing={onlyMissing}
         unlocks={unlocks}
         justSyncedPoiId={justSyncedPoiId}
         onSelectPoi={setSelectedPoi}
@@ -696,6 +723,10 @@ export default function App() {
           dailyBounty={dailyBounty}
           bountyStreak={user.bountyStreak}
           gps={gps}
+          sortByNearest={sortByNearest}
+          onlyMissing={onlyMissing}
+          onToggleSortByNearest={toggleSortByNearest}
+          onToggleOnlyMissing={toggleOnlyMissing}
           onSelectPoi={setSelectedPoi}
           onOpenPostcard={() => setShowPostcard(true)}
           onTrigger1860={handleTrigger1860}

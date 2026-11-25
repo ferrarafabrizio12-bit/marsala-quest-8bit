@@ -21,11 +21,13 @@ interface HudBarProps {
   unlockedCount: number;
   totalXp: number;
   dailyBounty: DailyBountyInfo | null;
+  onlyMissing: boolean;
   gps: RealGpsState;
   onTitleTap: () => void;
   onSkyTap: () => void;
   onRadarTap: () => void;
   onProgressTap: () => void;
+  onToggleOnlyMissing: () => void;
   onSelectBountyPoi: (poi: PoiDefinition) => void;
 }
 
@@ -34,11 +36,13 @@ export const HudBar: React.FC<HudBarProps> = ({
   unlockedCount,
   totalXp,
   dailyBounty,
+  onlyMissing,
   gps,
   onTitleTap,
   onSkyTap,
   onRadarTap,
   onProgressTap,
+  onToggleOnlyMissing,
   onSelectBountyPoi,
 }) => {
   const percent = Math.round((unlockedCount / MARSALA_POIS.length) * 100);
@@ -56,21 +60,6 @@ export const HudBar: React.FC<HudBarProps> = ({
 
   return (
     <header className="absolute top-0 left-0 right-0 z-[700] pointer-events-none px-2 safe-top flex flex-col gap-1.5">
-      <div className="flex items-center gap-1.5">
-        <span className="font-pixel text-[9px] sm:text-[11px] text-[#ffd166] truncate">
-          {user.nickname}
-        </span>
-        {user.isSuperuser && (
-          <span className="bg-[#dc2626] border border-[#ffd166] px-1 font-pixel text-[7px] text-white shrink-0">
-            ⚡SU
-          </span>
-        )}
-        {user.prestige > 0 && (
-          <span className="bg-[#a21caf] border border-[#f0abfc] px-1 font-pixel text-[7px] text-white shrink-0">
-            ★P{user.prestige}
-          </span>
-        )}
-      </div>
       <div className="nes-box pointer-events-auto px-2 py-1.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <button
@@ -88,6 +77,11 @@ export const HudBar: React.FC<HudBarProps> = ({
                 <span className="font-pixel text-[9px] sm:text-[11px] text-[#ffd166] truncate">
                   {user.nickname}
                 </span>
+                {user.isSuperuser && (
+                  <span className="bg-[#dc2626] border border-[#ffd166] px-1 font-pixel text-[7px] text-white shrink-0">
+                    ⚡SU
+                  </span>
+                )}
                 {user.prestige > 0 && (
                   <span className="bg-[#a21caf] border border-[#f0abfc] px-1 font-pixel text-[7px] text-white shrink-0">
                     ★P{user.prestige}
@@ -175,6 +169,25 @@ export const HudBar: React.FC<HudBarProps> = ({
           </span>
           <span className="font-pixel text-[7px] text-[#ffd166] shrink-0">
             APRI ▶
+          </span>
+        </button>
+      )}
+
+      {/* Pillola filtro permanente Solo Mancanti attivo sulla mappa */}
+      {onlyMissing && (
+        <button
+          type="button"
+          onClick={() => {
+            sound8bit.click();
+            onToggleOnlyMissing();
+          }}
+          className="pointer-events-auto px-2.5 py-1 border-[2px] bg-[#141b33]/95 border-[#ffd166] flex items-center justify-between gap-2 text-left shadow-[2px_2px_0_#000]"
+        >
+          <span className="font-pixel text-[7px] text-[#ffd166] truncate">
+            ❓ FILTRO MAPPA: SOLO MANCANTI ATTIVO
+          </span>
+          <span className="font-pixel text-[7px] text-[#4cc9f0] shrink-0">
+            MOSTRA TUTTI ✕
           </span>
         </button>
       )}
@@ -334,6 +347,10 @@ interface DexModalProps {
   dailyBounty: DailyBountyInfo | null;
   bountyStreak: number;
   gps: RealGpsState;
+  sortByNearest: boolean;
+  onlyMissing: boolean;
+  onToggleSortByNearest: () => void;
+  onToggleOnlyMissing: () => void;
   onSelectPoi: (poi: PoiDefinition) => void;
   onOpenPostcard: () => void;
   onTrigger1860: () => void;
@@ -347,6 +364,10 @@ export const DexModal: React.FC<DexModalProps> = ({
   dailyBounty,
   bountyStreak,
   gps,
+  sortByNearest,
+  onlyMissing,
+  onToggleSortByNearest,
+  onToggleOnlyMissing,
   onSelectPoi,
   onOpenPostcard,
   onTrigger1860,
@@ -355,8 +376,6 @@ export const DexModal: React.FC<DexModalProps> = ({
 }) => {
   const [tab, setTab] = useState<"pois" | "eggs">("pois");
   const [query, setQuery] = useState("");
-  const [sortByNearest, setSortByNearest] = useState(false);
-  const [onlyMissing, setOnlyMissing] = useState(false);
 
   const bountyPoi = dailyBounty
     ? MARSALA_POIS.find((p) => p.id === dailyBounty.poiId)
@@ -488,13 +507,13 @@ export const DexModal: React.FC<DexModalProps> = ({
               className="w-full mb-2 bg-[#090d18] border-[3px] border-[#4cc9f0] px-3 py-1.5 text-xl text-white outline-none focus:border-[#ffd166]"
             />
 
-            {/* Filtri rapidi: Più vicini + Solo mancanti */}
+            {/* Filtri permanenti: Più vicini + Solo mancanti (sincronizzato con la mappa) */}
             <div className="grid grid-cols-2 gap-1.5 mb-2.5">
               <button
                 type="button"
                 onClick={() => {
                   sound8bit.click();
-                  setSortByNearest((prev) => !prev);
+                  onToggleSortByNearest();
                 }}
                 className={`nes-btn py-1.5 text-[7px] sm:text-[8px] ${
                   sortByNearest
@@ -508,7 +527,7 @@ export const DexModal: React.FC<DexModalProps> = ({
                 type="button"
                 onClick={() => {
                   sound8bit.click();
-                  setOnlyMissing((prev) => !prev);
+                  onToggleOnlyMissing();
                 }}
                 className={`nes-btn py-1.5 text-[7px] sm:text-[8px] ${
                   onlyMissing
