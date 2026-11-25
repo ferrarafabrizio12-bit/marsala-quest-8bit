@@ -514,3 +514,17 @@ export function getCurrentCardEdition(
   if (hour >= 20 || hour < 6) return "night";
   return "standard";
 }
+
+/** Calcola il raggio di sblocco stile Assassin's Creed: stretto nel centro denso, più ampio per i POI isolati */
+export function getAdaptiveFogRadiusMeters(poi: PoiDefinition): number {
+  const distances = MARSALA_POIS.filter((other) => other.id !== poi.id)
+    .map((other) => haversineMeters(poi.lat, poi.lng, other.lat, other.lng))
+    .sort((a, b) => a - b);
+
+  if (distances.length === 0) return 220;
+
+  const nearestAvg =
+    distances.length >= 2 ? (distances[0] + distances[1]) / 2 : distances[0];
+
+  return Math.max(130, Math.min(1850, Math.round(nearestAvg * 0.65)));
+}

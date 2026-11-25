@@ -27,6 +27,39 @@ interface CameraCardModalProps {
   onSubmitUnlock: (photoDataUrl: string) => Promise<void>;
 }
 
+function wrapCanvasLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  maxLines: number,
+): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (ctx.measureText(candidate).width <= maxWidth) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      current = word;
+      if (lines.length >= maxLines) break;
+    }
+  }
+
+  if (current && lines.length < maxLines) {
+    lines.push(current);
+  } else if (lines.length === maxLines && words.length > 0) {
+    const last = lines[maxLines - 1];
+    if (ctx.measureText(last).width > maxWidth - 16) {
+      lines[maxLines - 1] = `${last.slice(0, -3)}...`;
+    }
+  }
+
+  return lines;
+}
+
 function renderCardCanvas(params: {
   sourceImage: HTMLImageElement | null;
   pixelFilter: boolean;
@@ -57,7 +90,7 @@ function renderCardCanvas(params: {
   } = params;
 
   const W = 540;
-  const H = 720;
+  const H = 780;
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
@@ -110,6 +143,7 @@ function renderCardCanvas(params: {
   ctx.lineWidth = 4;
   ctx.strokeRect(20, 20, W - 40, H - 40);
 
+  // Header Card
   ctx.fillStyle = isHoloCard
     ? "#f0abfc"
     : isGolden
@@ -125,17 +159,18 @@ function renderCardCanvas(params: {
       : isNight
         ? "NIGHT EDITION"
         : "MARSALA-DEX CARD";
-  ctx.fillText(`${"★".repeat(rarity)} ${headerTag}`, 34, 56);
+  ctx.fillText(`${"★".repeat(rarity)} ${headerTag}`, 34, 54);
 
   ctx.fillStyle = "#38e54d";
   ctx.textAlign = "right";
-  ctx.fillText(`+${potentialXp} XP`, W - 34, 56);
+  ctx.fillText(`+${potentialXp} XP`, W - 34, 54);
   ctx.textAlign = "left";
 
+  // Riquadro foto centrale
   const px = 34;
-  const py = 74;
+  const py = 70;
   const pw = W - 68;
-  const ph = 410;
+  const ph = 350;
 
   ctx.fillStyle = "#05070f";
   ctx.fillRect(px, py, pw, ph);
@@ -150,7 +185,7 @@ function renderCardCanvas(params: {
     if (pixelFilter) {
       const tmp = document.createElement("canvas");
       tmp.width = 135;
-      tmp.height = 102;
+      tmp.height = 100;
       const tctx = tmp.getContext("2d")!;
       tctx.drawImage(sourceImage, sx, sy, sw, sh, 0, 0, tmp.width, tmp.height);
       ctx.imageSmoothingEnabled = false;
@@ -160,7 +195,6 @@ function renderCardCanvas(params: {
       ctx.drawImage(sourceImage, sx, sy, sw, sh, px, py, pw, ph);
     }
   } else {
-    // Sfondo 8-bit procedurale per sblocco rapido Superuser senza fotocamera
     const skyGrad = ctx.createLinearGradient(px, py, px, py + ph);
     skyGrad.addColorStop(0, "#1e1b4b");
     skyGrad.addColorStop(0.65, "#312e81");
@@ -171,16 +205,16 @@ function renderCardCanvas(params: {
 
     ctx.fillStyle = "#ffd166";
     ctx.beginPath();
-    ctx.arc(px + pw - 95, py + 95, 36, 0, Math.PI * 2);
+    ctx.arc(px + pw - 90, py + 82, 32, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.font = "110px sans-serif";
+    ctx.font = "96px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(poi.icon, px + pw / 2, py + 235);
+    ctx.fillText(poi.icon, px + pw / 2, py + 205);
 
     ctx.fillStyle = "#4cc9f0";
     ctx.font = "bold 18px monospace";
-    ctx.fillText("MARSALA • LILIBEO 8-BIT", px + pw / 2, py + 345);
+    ctx.fillText("MARSALA • LILIBEO 8-BIT", px + pw / 2, py + 305);
     ctx.textAlign = "left";
   }
 
@@ -205,19 +239,56 @@ function renderCardCanvas(params: {
   ctx.lineWidth = 4;
   ctx.strokeRect(px, py, pw, ph);
 
+  // Nome monumento & zona
   ctx.fillStyle = "#ffd166";
-  ctx.font = "bold 25px monospace";
-  ctx.fillText(poi.name.slice(0, 28), 34, 530);
+  ctx.font = "bold 24px monospace";
+  ctx.fillText(poi.name.slice(0, 29), 34, 460);
 
   ctx.fillStyle = "#4cc9f0";
-  ctx.font = "20px monospace";
-  ctx.fillText(poi.zone.slice(0, 38), 34, 562);
+  ctx.font = "19px monospace";
+  ctx.fillText(poi.zone.slice(0, 40), 34, 488);
 
+  // Separatore descrizione dentro la Card
+  ctx.strokeStyle = "rgba(76, 201, 240, 0.35)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(34, 502);
+  ctx.lineTo(W - 34, 502);
+  ctx.stroke();
+
+  // Descrizione & Curiosità dentro la Card
+  ctx.fillStyle = "#f4f1de";
+  ctx.font = "16px monospace";
+  const descLines = wrapCanvasLines(ctx, poi.shortDesc, pw, 2);
+  let textY = 524;
+  for (const line of descLines) {
+    ctx.fillText(line, 34, textY);
+    textY += 21;
+  }
+
+  ctx.fillStyle = "#cbd5e1";
+  ctx.font = "15px monospace";
+  const triviaLines = wrapCanvasLines(ctx, `💡 ${poi.trivia}`, pw, 3);
+  textY += 4;
+  for (const line of triviaLines) {
+    ctx.fillText(line, 34, textY);
+    textY += 20;
+  }
+
+  // Separatore metadati giocatore
+  ctx.strokeStyle = "rgba(255, 209, 102, 0.3)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(34, 654);
+  ctx.lineTo(W - 34, 654);
+  ctx.stroke();
+
+  // Metadati certificati GPS
   ctx.fillStyle = "#e2e8f0";
-  ctx.font = "18px monospace";
-  ctx.fillText(`PLAYER: ${nickname}`, 34, 606);
+  ctx.font = "17px monospace";
+  ctx.fillText(`PLAYER: ${nickname}`, 34, 680);
 
-  ctx.fillText(`GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`, 34, 636);
+  ctx.fillText(`GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`, 34, 706);
 
   const dateStr = new Date().toLocaleDateString("it-IT");
   ctx.fillStyle = isGolden ? "#ffb703" : isNight ? "#7dd3fc" : "#94a3b8";
@@ -228,7 +299,7 @@ function renderCardCanvas(params: {
       : isDailyBounty
         ? "DAILY BOUNTY"
         : "MARSALA QUEST 8-BIT";
-  ctx.fillText(`${footerTag} • ${dateStr}`, 34, 674);
+  ctx.fillText(`${footerTag} • ${dateStr}`, 34, 740);
 
   return canvas.toDataURL("image/jpeg", 0.86);
 }
@@ -249,15 +320,12 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
   onSubmitUnlock,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
   const [rawPhoto, setRawPhoto] = useState<string | null>(null);
   const [cardPreview, setCardPreview] = useState<string | null>(
     existingUnlock?.photoDataUrl || null,
   );
   const [pixelFilter, setPixelFilter] = useState(true);
-  const [liveCameraOpen, setLiveCameraOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -290,16 +358,6 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
 
   const canTakeNewShot =
     isSuperuser || !existingUnlock || isDailyBounty || isNewSpecialEdition;
-
-  const stopLiveCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    setLiveCameraOpen(false);
-  };
-
-  useEffect(() => stopLiveCamera, []);
 
   const buildCurrentCardDataUrl = useCallback(
     (sourceImage: HTMLImageElement | null) =>
@@ -353,41 +411,6 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
       }
     };
     reader.readAsDataURL(file);
-  };
-
-  const handleOpenLiveCamera = async () => {
-    sound8bit.click();
-    setError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      setLiveCameraOpen(true);
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          void videoRef.current.play();
-        }
-      });
-    } catch {
-      fileInputRef.current?.click();
-    }
-  };
-
-  const handleCaptureFrame = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 720;
-    canvas.height = video.videoHeight || 540;
-    canvas
-      .getContext("2d")!
-      .drawImage(video, 0, 0, canvas.width, canvas.height);
-    sound8bit.click();
-    setRawPhoto(canvas.toDataURL("image/jpeg", 0.9));
-    stopLiveCamera();
   };
 
   const handleConfirm = async () => {
@@ -476,10 +499,7 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
             </h2>
           </div>
           <button
-            onClick={() => {
-              stopLiveCamera();
-              onClose();
-            }}
+            onClick={onClose}
             className="nes-btn w-10 h-10 bg-[#ff4d6d] text-white text-[10px] shrink-0"
           >
             X
@@ -526,14 +546,6 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
           </div>
         )}
 
-        {/* Descrizione & Curiosità */}
-        <p className="text-xl text-[#f4f1de] leading-tight mb-1.5">
-          {poi.shortDesc}
-        </p>
-        <p className="text-lg text-[#94a3b8] leading-tight mb-3">
-          💡 {poi.trivia}
-        </p>
-
         {/* Stato Distanza GPS + Tasto Bussola */}
         <div
           className={`border-[3px] p-2.5 mb-3 flex items-center justify-between gap-2 ${
@@ -563,7 +575,6 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
               type="button"
               onClick={() => {
                 sound8bit.click();
-                stopLiveCamera();
                 onTrackWithCompass(poi);
               }}
               className="nes-btn px-2.5 py-2 bg-[#4cc9f0] text-black text-[8px]"
@@ -573,38 +584,13 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
           </div>
         </div>
 
-        {/* Anteprima Card o Mirino Fotocamera */}
-        {liveCameraOpen ? (
-          <div className="mb-3 space-y-2">
-            <video
-              ref={videoRef}
-              playsInline
-              muted
-              className="w-full h-64 object-cover bg-black border-[3px] border-[#4cc9f0]"
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={handleCaptureFrame}
-                className="nes-btn py-3 bg-[#38e54d] text-black text-[9px]"
-              >
-                📸 SCATTA ORA
-              </button>
-              <button
-                type="button"
-                onClick={stopLiveCamera}
-                className="nes-btn py-3 bg-[#26335c] text-white text-[9px]"
-              >
-                ANNULLA
-              </button>
-            </div>
-          </div>
-        ) : cardPreview ? (
+        {/* Anteprima Card (con descrizione e curiosità stampate dentro) */}
+        {cardPreview ? (
           <div className="mb-3 flex flex-col items-center">
             <img
               src={cardPreview}
               alt={poi.name}
-              className="max-h-[42dvh] w-auto border-[3px] border-[#ffd166] shadow-[4px_4px_0_#000]"
+              className="max-h-[48dvh] w-auto border-[3px] border-[#ffd166] shadow-[4px_4px_0_#000]"
             />
 
             {rawPhoto && (
@@ -633,7 +619,16 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
               </div>
             )}
           </div>
-        ) : null}
+        ) : (
+          <div className="mb-3 border-[3px] border-[#2e3d6b] bg-[#090d18] p-3">
+            <p className="text-xl text-[#f4f1de] leading-tight mb-1.5">
+              {poi.shortDesc}
+            </p>
+            <p className="text-lg text-[#94a3b8] leading-tight">
+              💡 {poi.trivia}
+            </p>
+          </div>
+        )}
 
         <input
           ref={fileInputRef}
@@ -652,25 +647,15 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
 
         {/* Pulsanti Azione */}
         <div className="space-y-2">
-          {canTakeNewShot && !liveCameraOpen && (
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={!isInRange}
-                onClick={() => fileInputRef.current?.click()}
-                className="nes-btn py-3 bg-[#ffd166] text-black text-[8px] sm:text-[9px] disabled:opacity-45"
-              >
-                📷 FOTOCAMERA
-              </button>
-              <button
-                type="button"
-                disabled={!isInRange}
-                onClick={() => void handleOpenLiveCamera()}
-                className="nes-btn py-3 bg-[#4cc9f0] text-black text-[8px] sm:text-[9px] disabled:opacity-45"
-              >
-                🎥 MIRINO LIVE
-              </button>
-            </div>
+          {canTakeNewShot && (
+            <button
+              type="button"
+              disabled={!isInRange}
+              onClick={() => fileInputRef.current?.click()}
+              className="nes-btn w-full py-3 bg-[#ffd166] text-black text-[9px] disabled:opacity-45"
+            >
+              📷 FOTOCAMERA
+            </button>
           )}
 
           {rawPhoto && cardPreview && (
@@ -688,7 +673,6 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
             </button>
           )}
 
-          {/* Pulsante Superuser (Fabbro): sblocca istantaneamente senza GPS e senza foto */}
           {isSuperuser && (
             <button
               type="button"
@@ -702,7 +686,6 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
             </button>
           )}
 
-          {/* Salva o Condividi Card acquisita */}
           {cardPreview && (existingUnlock || rawPhoto) && (
             <button
               type="button"

@@ -5,6 +5,7 @@ import {
   MARSALA_CENTER,
   MARSALA_POIS,
   type PoiDefinition,
+  getAdaptiveFogRadiusMeters,
   haversineMeters,
 } from "../../shared/pois";
 import type { AvatarConfig } from "../../shared/cosmetics";
@@ -28,8 +29,7 @@ interface MarsalaFogMapProps {
   onFitMarsalaTap: () => void;
 }
 
-interface ScreenCircle {
-  id: string;
+interface SyncPulse {
   x: number;
   y: number;
   r: number;
@@ -73,21 +73,18 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   onFitMarsalaTap,
 }) => {
   const colorContainerRef = useRef<HTMLDivElement | null>(null);
-  const greyContainerRef = useRef<HTMLDivElement | null>(null);
   const mainContainerRef = useRef<HTMLDivElement | null>(null);
+  const fogCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const colorMapRef = useRef<L.Map | null>(null);
-  const greyMapRef = useRef<L.Map | null>(null);
   const mainMapRef = useRef<L.Map | null>(null);
 
-  const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const poiMarkersRef = useRef(new Map<string, L.Marker>());
   const playerMarkerRef = useRef<L.Marker | null>(null);
   const accuracyCircleRef = useRef<L.Circle | null>(null);
   const routeShadowRef = useRef<L.Polyline | null>(null);
   const routeLineRef = useRef<L.Polyline | null>(null);
 
-  const [rings, setRings] = useState<ScreenCircle[]>([]);
   const [zoomLevel, setZoomLevel] = useState<number>(14);
   const [minZoom, setMinZoom] = useState<number>(() => getResponsiveMinZoom());
 
@@ -103,101 +100,94 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   const isMapCompleted = Object.keys(unlocks).length >= MARSALA_POIS.length;
   const showLabels = zoomLevel >= 15;
 
-  const updateFogAndSync = () => {
+  // Disegna direttamente sul canvas GPU in mix-blend-mode: color (zero toDataURL, zero flicker)
+  const drawFogCanvasAndSync = () => {
     const mainMap = mainMapRef.current;
     const colorMap = colorMapRef.current;
-    const greyMap = greyMapRef.current;
-    const greyEl = greyContainerRef.current;
-    if (!mainMap || !colorMap || !greyMap || !greyEl) return;
+    const canvas = fogCanvasRef.current;
+    if (!mainMap || !colorMap || !canvas) return;
 
     const center = mainMap.getCenter();
     const zoom = mainMap.getZoom();
     setZoomLevel(zoom);
 
     colorMap.setView(center, zoom, { animate: false });
-    greyMap.setView(center, zoom, { animate: false });
+
+    const size = mainMap.getSize();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const targetW = Math.max(1, Math.round(size.x * dpr));
+    const targetH = Math.max(1, Math.round(size.y * dpr));
+
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.clearRect(0, 0, size.x, size.y);
 
     const currentUnlocks = unlocksRef.current;
     const unlockedCount = Object.keys(currentUnlocks).length;
 
+    // Se tutti i 20 POI sono sbloccati, l'intera mappa resta a colori
     if (unlockedCount >= MARSALA_POIS.length) {
-      greyEl.style.opacity = "0";
-      greyEl.style.maskImage = "none";
-      greyEl.style.setProperty("-webkit-mask-image", "none");
-      setRings([]);
       return;
     }
 
-    greyEl.style.opacity = "1";
+    // Copertura grigia uniforme su tutta la mappa inesplorata
+    ctx.fillStyle = "rgb(128, 128, 128)";
+    ctx.fillRect(0, 0, size.x, size.y);
 
     if (unlockedCount === 0) {
-      greyEl.style.maskImage = "none";
-      greyEl.style.setProperty("-webkit-mask-image", "none");
-      setRings([]);
       return;
     }
 
-    const size = mainMap.getSize();
-    const scale = 3;
-    const cw = Math.max(1, Math.ceil(size.x / scale));
-    const ch = Math.max(1, Math.ceil(size.y / scale));
-
-    if (!maskCanvasRef.current) {
-      maskCanvasRef.current = document.createElement("canvas");
-    }
-    const canvas = maskCanvasRef.current;
-    if (canvas.width !== cw || canvas.height !== ch) {
-      canvas.width = cw;
-      canvas.height = ch;
-    }
-
-    const ctx = canvas.getContext("2d")!;
-    ctx.globalCompositeOperation = "source-over";
-    ctx.clearRect(0, 0, cw, ch);
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, 0, cw, ch);
-
+    // Sottrae le aree dei POI sbloccati con sfumatura morbida (senza cerchi tratteggiati)
     ctx.globalCompositeOperation = "destination-out";
 
-    const nextRings: ScreenCircle[] = [];
     for (const poi of MARSALA_POIS) {
       if (!currentUnlocks[poi.id]) continue;
+
       const pt = mainMap.latLngToContainerPoint([poi.lat, poi.lng]);
       const metersPerPixel =
         (156543.03392 * Math.cos((poi.lat * Math.PI) / 180)) /
         Math.pow(2, zoom);
-      const r = poi.fogRevealRadiusMeters / metersPerPixel;
+      const radiusMeters = getAdaptiveFogRadiusMeters(poi);
+      const r = radiusMeters / metersPerPixel;
 
-      nextRings.push({ id: poi.id, x: pt.x, y: pt.y, r });
+      if (
+        pt.x + r < 0 ||
+        pt.x - r > size.x ||
+        pt.y + r < 0 ||
+        pt.y - r > size.y
+      ) {
+        continue;
+      }
 
-      const cx = pt.x / scale;
-      const cy = pt.y / scale;
-      const cr = Math.max(2, r / scale);
-
-      const grad = ctx.createRadialGradient(cx, cy, cr * 0.72, cx, cy, cr);
-      grad.addColorStop(0, "rgba(0,0,0,1)");
-      grad.addColorStop(1, "rgba(0,0,0,0)");
+      const grad = ctx.createRadialGradient(
+        pt.x,
+        pt.y,
+        r * 0.68,
+        pt.x,
+        pt.y,
+        r,
+      );
+      grad.addColorStop(0, "rgba(0, 0, 0, 1)");
+      grad.addColorStop(1, "rgba(0, 0, 0, 0)");
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+      ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
       ctx.fill();
     }
-
-    const maskUrl = `url(${canvas.toDataURL("image/png")})`;
-    greyEl.style.maskImage = maskUrl;
-    greyEl.style.setProperty("-webkit-mask-image", maskUrl);
-    greyEl.style.maskSize = "100% 100%";
-    greyEl.style.setProperty("-webkit-mask-size", "100% 100%");
-    greyEl.style.maskRepeat = "no-repeat";
-    greyEl.style.setProperty("-webkit-mask-repeat", "no-repeat");
-
-    setRings(nextRings);
   };
 
   useEffect(() => {
     if (
       !colorContainerRef.current ||
-      !greyContainerRef.current ||
       !mainContainerRef.current ||
       mainMapRef.current
     ) {
@@ -224,17 +214,12 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
       fadeAnimation: false,
     };
 
-    const sharedStaticOpts: L.MapOptions = {
+    const colorMap = L.map(colorContainerRef.current, {
       ...noZoomOpts,
       attributionControl: false,
       dragging: false,
-    };
-
-    const colorMap = L.map(colorContainerRef.current, sharedStaticOpts);
+    });
     L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(colorMap);
-
-    const greyMap = L.map(greyContainerRef.current, sharedStaticOpts);
-    L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(greyMap);
 
     const mainMap = L.map(mainContainerRef.current, {
       ...noZoomOpts,
@@ -247,7 +232,6 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     );
 
     colorMapRef.current = colorMap;
-    greyMapRef.current = greyMap;
     mainMapRef.current = mainMap;
 
     const applyMinZoomLock = () => {
@@ -266,17 +250,16 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
       } else {
         mainMap.dragging.enable();
       }
-      updateFogAndSync();
+      drawFogCanvasAndSync();
     };
 
-    const handleSync = () => updateFogAndSync();
+    const handleSync = () => drawFogCanvasAndSync();
     const handleResize = () => {
       const nextMin = getResponsiveMinZoom();
       minZoomRef.current = nextMin;
       setMinZoom(nextMin);
       mainMap.setMinZoom(nextMin);
       colorMap.setMinZoom(nextMin);
-      greyMap.setMinZoom(nextMin);
       if (mainMap.getZoom() < nextMin) {
         mainMap.setZoom(nextMin, { animate: false });
       }
@@ -293,10 +276,8 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
       mainMap.off("zoomend", applyMinZoomLock);
       mainMap.off("resize", handleResize);
       mainMap.remove();
-      greyMap.remove();
       colorMap.remove();
       mainMapRef.current = null;
-      greyMapRef.current = null;
       colorMapRef.current = null;
       poiMarkersRef.current.clear();
       playerMarkerRef.current = null;
@@ -307,7 +288,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   }, []);
 
   useEffect(() => {
-    updateFogAndSync();
+    drawFogCanvasAndSync();
   }, [unlocks]);
 
   useEffect(() => {
@@ -480,7 +461,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     onSelectPoi,
   ]);
 
-  // Avatar giocatore + Freccia direzionale (sempre sotto l'omino)
+  // Avatar giocatore + Freccia direzionale dietro allo sprite
   useEffect(() => {
     const map = mainMapRef.current;
     if (!map || gps.lat === null || gps.lng === null) return;
@@ -497,7 +478,6 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
           ? computeBearing(gps.lat, gps.lng, fallbackAim[0], fallbackAim[1])
           : 0;
 
-    // Freccia compatta (84x84) che parte dal centro dell'omino dietro allo sprite (z-index: 1)
     const arrowHtml = `
       <div style="
         position: absolute;
@@ -596,58 +576,70 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     walkingRoute,
   ]);
 
-  const syncedRing = justSyncedPoiId
-    ? rings.find((r) => r.id === justSyncedPoiId)
-    : null;
+  let syncPulse: SyncPulse | null = null;
+  if (justSyncedPoiId && mainMapRef.current) {
+    const syncedPoi = MARSALA_POIS.find((p) => p.id === justSyncedPoiId);
+    if (syncedPoi) {
+      const pt = mainMapRef.current.latLngToContainerPoint([
+        syncedPoi.lat,
+        syncedPoi.lng,
+      ]);
+      const metersPerPixel =
+        (156543.03392 * Math.cos((syncedPoi.lat * Math.PI) / 180)) /
+        Math.pow(2, zoomLevel);
+      syncPulse = {
+        x: pt.x,
+        y: pt.y,
+        r: getAdaptiveFogRadiusMeters(syncedPoi) / metersPerPixel,
+      };
+    }
+  }
+
   const hasCompassBar = Boolean(navTargetPoi && !selectedPoi);
   const baseBottomPx = isMapCompleted ? 118 : 80;
   const controlsBottomPx = hasCompassBar ? baseBottomPx + 88 : baseBottomPx;
 
   return (
-    <div className="relative w-full h-full overflow-hidden bg-[#0b0e1a]">
+    <div
+      className="relative w-full h-full overflow-hidden bg-[#0b0e1a]"
+      style={{ isolation: "isolate" }}
+    >
+      {/* Mappa base a colori */}
       <div
         ref={colorContainerRef}
         className="absolute inset-0 z-0 pointer-events-none marsala-color-map"
       />
 
-      <div
-        ref={greyContainerRef}
-        className="absolute inset-0 z-10 pointer-events-none marsala-grey-map transition-opacity duration-1000"
+      {/* Nebbia grigia sincronizzata su GPU senza flicker */}
+      <canvas
+        ref={fogCanvasRef}
+        style={{ mixBlendMode: "color" }}
+        className="absolute inset-0 w-full h-full z-10 pointer-events-none"
       />
 
-      <svg className="absolute inset-0 w-full h-full z-[15] pointer-events-none">
-        {!isMapCompleted &&
-          rings.map((c) => (
-            <circle
-              key={`ring-${c.id}`}
-              cx={c.x}
-              cy={c.y}
-              r={Math.max(c.r - 3, 4)}
-              fill="none"
-              stroke="rgba(255, 209, 102, 0.72)"
-              strokeWidth="2.5"
-              strokeDasharray="8 6"
-            />
-          ))}
-        {syncedRing && (
+      {/* Onda d'urto momentanea solo all'atto dello sblocco */}
+      {syncPulse && (
+        <svg className="absolute inset-0 w-full h-full z-[15] pointer-events-none">
           <circle
-            cx={syncedRing.x}
-            cy={syncedRing.y}
-            r={syncedRing.r * 0.65}
+            cx={syncPulse.x}
+            cy={syncPulse.y}
+            r={syncPulse.r * 0.65}
             fill="none"
             stroke="#ffd166"
             strokeWidth="6"
             className="sync-shockwave"
-            style={{ transformOrigin: `${syncedRing.x}px ${syncedRing.y}px` }}
+            style={{ transformOrigin: `${syncPulse.x}px ${syncPulse.y}px` }}
           />
-        )}
-      </svg>
+        </svg>
+      )}
 
+      {/* Layer interattivo marker & percorsi */}
       <div
         ref={mainContainerRef}
         className="absolute inset-0 z-20 marsala-main-map"
       />
 
+      {/* Controlli Zoom / Mappa / GPS */}
       <div
         style={{
           bottom: `calc(${controlsBottomPx}px + env(safe-area-inset-bottom, 0px))`,
