@@ -599,8 +599,9 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
   const syncedRing = justSyncedPoiId
     ? rings.find((r) => r.id === justSyncedPoiId)
     : null;
-  const zoomControlsBottom =
-    navTargetPoi && !selectedPoi ? "bottom-40" : "bottom-24";
+  const hasCompassBar = Boolean(navTargetPoi && !selectedPoi);
+  const baseBottomPx = isMapCompleted ? 118 : 80;
+  const controlsBottomPx = hasCompassBar ? baseBottomPx + 88 : baseBottomPx;
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-[#0b0e1a]">
@@ -648,7 +649,10 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
       />
 
       <div
-        className={`absolute right-2.5 ${zoomControlsBottom} flex flex-col gap-2 z-[600] transition-all duration-200`}
+        style={{
+          bottom: `calc(${controlsBottomPx}px + env(safe-area-inset-bottom, 0px))`,
+        }}
+        className="absolute right-2.5 flex flex-col gap-1.5 z-[600] transition-all duration-200"
       >
         <button
           disabled={zoomLevel >= MAX_ZOOM}

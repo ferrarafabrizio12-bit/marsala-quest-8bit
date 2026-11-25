@@ -551,7 +551,12 @@ export default function App() {
       )}
 
       {toast && (
-        <div className="fixed bottom-44 left-1/2 -translate-x-1/2 z-[1100] nes-box-gold px-3.5 py-2 text-xl text-[#ffd166] text-center max-w-[92vw]">
+        <div
+          style={{
+            bottom: `calc(${navTargetPoi && !selectedPoi ? 174 : 88}px + env(safe-area-inset-bottom, 0px))`,
+          }}
+          className="fixed left-1/2 -translate-x-1/2 z-[1100] nes-box-gold px-3.5 py-2 text-xl text-[#ffd166] text-center max-w-[92vw]"
+        >
           {toast}
         </div>
       )}
