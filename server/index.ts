@@ -188,7 +188,7 @@ function buildSvgFallbackCard(
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-// --- CACHE & PROXY TASSELLI MAPPA DI MARSALA PER CARTOLINA DI VIAGGIO ---
+// --- CACHE & PROXY TASSELLI OPENSTREETMAP PER CARTOLINA DI VIAGGIO ---
 const tileCache = new Map<string, { buf: Buffer; contentType: string }>();
 
 function isValidMarsalaTile(z: number, x: number, y: number): boolean {
@@ -203,7 +203,7 @@ function isValidMarsalaTile(z: number, x: number, y: number): boolean {
   const tileLat = (latRad * 180) / Math.PI;
 
   return (
-    tileLng >= 12.1 && tileLng <= 12.8 && tileLat >= 37.55 && tileLat <= 38.05
+    tileLng >= 11.8 && tileLng <= 13.0 && tileLat >= 37.4 && tileLat <= 38.2
   );
 }
 
@@ -217,19 +217,22 @@ app.get("/api/map-tile/:z/:x/:yPng", async (req: Request, res: Response) => {
     return;
   }
 
-  const key = `esri:${z}/${x}/${y}`;
+  const key = `osm-v3:${z}/${x}/${y}`;
   const cached = tileCache.get(key);
   if (cached) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Content-Type", cached.contentType);
     res.setHeader("Cache-Control", "public, max-age=86400");
     res.send(cached.buf);
     return;
   }
 
-  // Esri World Street Map usa ordine /{z}/{y}/{x} e restituisce sempre la mappa reale completa senza segnaposto
+  // Server OpenStreetMap aperti (nessuna API key e nessun segnaposto bianco)
   const sources = [
-    `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${y}/${x}`,
-    `https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/${z}/${y}/${x}`,
+    `https://tile.openstreetmap.de/${z}/${x}/${y}.png`,
+    `https://a.tile.openstreetmap.fr/osmfr/${z}/${x}/${y}.png`,
+    `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
+    `https://tile.opentopomap.org/${z}/${x}/${y}.png`,
   ];
 
   for (const url of sources) {
@@ -239,33 +242,35 @@ app.get("/api/map-tile/:z/:x/:yPng", async (req: Request, res: Response) => {
       const upstream = await fetch(url, {
         signal: controller.signal,
         headers: {
-          "User-Agent": "MarsalaQuest8Bit/1.0",
-          Accept: "image/png,image/jpeg,image/*;q=0.8",
+          "User-Agent":
+            "MarsalaQuest8Bit/1.0 (https://marsala-quest-8bit.vercel.app)",
+          Accept: "image/png,image/*;q=0.9",
         },
       });
       clearTimeout(timer);
 
       if (!upstream.ok) continue;
-      const contentType = upstream.headers.get("content-type") || "image/jpeg";
+      const contentType = upstream.headers.get("content-type") || "image/png";
       if (!contentType.startsWith("image/")) continue;
 
       const arrBuf = await upstream.arrayBuffer();
       const buf = Buffer.from(arrBuf);
-      // Scarta eventuali immagini di errore/segnaposto troppo piccole
-      if (buf.length < 2000) continue;
+      // Scarta eventuali segnaposto vuoti o risposte troppo piccole
+      if (buf.length < 6500) continue;
 
-      if (tileCache.size >= 400) {
+      if (tileCache.size >= 500) {
         const firstKey = tileCache.keys().next().value;
         if (firstKey) tileCache.delete(firstKey);
       }
       tileCache.set(key, { buf, contentType });
 
+      res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Content-Type", contentType);
       res.setHeader("Cache-Control", "public, max-age=86400");
       res.send(buf);
       return;
     } catch {
-      // Prova la sorgente successiva
+      // Prova il server OSM successivo
     }
   }
 

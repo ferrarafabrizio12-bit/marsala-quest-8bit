@@ -1,6 +1,6 @@
-import React from 'react';
-import type { AvatarConfig } from '../../shared/cosmetics';
-import { getAvatarPixelRects } from '../utils/avatarPixels';
+import React, { useMemo } from "react";
+import type { AvatarConfig } from "../../shared/cosmetics";
+import { buildAvatarPixelGrid } from "../utils/avatarPixels";
 
 interface PixelAvatarProps {
   avatar: AvatarConfig;
@@ -11,9 +11,9 @@ interface PixelAvatarProps {
 export const PixelAvatar: React.FC<PixelAvatarProps> = ({
   avatar,
   size = 48,
-  className = '',
+  className = "",
 }) => {
-  const rects = getAvatarPixelRects(avatar);
+  const grid = useMemo(() => buildAvatarPixelGrid(avatar), [avatar]);
   const height = Math.round(size * 1.25);
 
   return (
@@ -21,16 +21,24 @@ export const PixelAvatar: React.FC<PixelAvatarProps> = ({
       width={size}
       height={height}
       viewBox="0 0 16 20"
-      className={className}
-      style={{
-        imageRendering: 'pixelated',
-        filter: 'drop-shadow(2px 2px 0px #000)',
-      }}
-      aria-label="Avatar esploratore"
+      shapeRendering="crispEdges"
+      className={`inline-block select-none ${className}`}
+      aria-label="Avatar 8-Bit"
     >
-      {rects.map((r, i) => (
-        <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={r.fill} />
-      ))}
+      {grid.map((row, y) =>
+        row.map((fill, x) =>
+          fill ? (
+            <rect
+              key={`${x}-${y}`}
+              x={x}
+              y={y}
+              width={1}
+              height={1}
+              fill={fill}
+            />
+          ) : null,
+        ),
+      )}
     </svg>
   );
 };

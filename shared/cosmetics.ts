@@ -33,7 +33,7 @@ export interface CosmeticItem {
 }
 
 export const COSMETICS_CATALOG: CosmeticItem[] = [
-  // --- CAPPELLI ---
+  // --- CAPPELLI (8) ---
   {
     id: "hat-none",
     slot: "hat",
@@ -46,7 +46,7 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     id: "hat-cap-red",
     slot: "hat",
     name: "Berretto Lilibeo",
-    description: "Il classico berretto rosso da esploratore 8-bit.",
+    description: "Il classico berretto rosso con visiera da esploratore 8-bit.",
     previewColor: "#ef4444",
     requirement: { type: "default" },
   },
@@ -54,15 +54,23 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     id: "hat-straw",
     slot: "hat",
     name: "Cappello di Paglia",
-    description: "Perfetto per camminare sotto il sole delle Saline.",
+    description: "Ampia tesa dorata con nastro rosso per il sole delle Saline.",
     previewColor: "#facc15",
-    requirement: { type: "cards", count: 3 },
+    requirement: { type: "cards", count: 2 },
+  },
+  {
+    id: "hat-sailor",
+    slot: "hat",
+    name: "Cappello da Marinaio",
+    description: "Berretto bianco della marineria del Porto di Marsala.",
+    previewColor: "#f8fafc",
+    requirement: { type: "cards", count: 5 },
   },
   {
     id: "hat-beret-red",
     slot: "hat",
     name: "Berretto Garibaldino",
-    description: "Storico copricapo dei Mille sbarcati nel 1860.",
+    description: "Storico copricapo dei Mille sbarcati l’11 Maggio 1860.",
     previewColor: "#dc2626",
     requirement: {
       type: "easter_egg",
@@ -71,15 +79,41 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     },
   },
   {
+    id: "hat-punic-helm",
+    slot: "hat",
+    name: "Elmo Punico di Mozia",
+    description:
+      "Elmo in bronzo con cresta azzurra degli antichi navigatori fenici.",
+    previewColor: "#d97706",
+    requirement: {
+      type: "easter_egg",
+      eggId: "nave-punica",
+      eggTitle: "Nave Punica 397 a.C.",
+    },
+  },
+  {
+    id: "hat-bandana-kite",
+    slot: "hat",
+    name: "Fascia Maestrale",
+    description:
+      "Bandana sportiva smeraldo per cavalcare il vento allo Stagnone.",
+    previewColor: "#10b981",
+    requirement: {
+      type: "easter_egg",
+      eggId: "vento-stagnone",
+      eggTitle: "Vento dello Stagnone",
+    },
+  },
+  {
     id: "hat-crown-gold",
     slot: "hat",
     name: "Corona di Lilibeo ★",
-    description: "Corona d’oro riservata alle leggende Prestigio.",
+    description: "Corona d’oro con gemme riservata alle leggende Prestigio.",
     previewColor: "#ffd166",
     requirement: { type: "prestige", level: 1 },
   },
 
-  // --- OCCHIALI ---
+  // --- OCCHIALI & VISORI (7) ---
   {
     id: "glasses-none",
     slot: "glasses",
@@ -94,7 +128,15 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     name: "Occhiali Pixel 8-Bit",
     description: "Montatura nera squadrata ad alto contrasto.",
     previewColor: "#1e293b",
-    requirement: { type: "cards", count: 2 },
+    requirement: { type: "cards", count: 1 },
+  },
+  {
+    id: "glasses-aviator",
+    slot: "glasses",
+    name: "Occhiali Aviator Oro",
+    description: "Lenti scure specchiate con ponte dorato per il lungomare.",
+    previewColor: "#ca8a04",
+    requirement: { type: "cards", count: 4 },
   },
   {
     id: "glasses-sunset",
@@ -112,7 +154,7 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     id: "glasses-neon",
     slot: "glasses",
     name: "Visore Notte Neon",
-    description: "Lenti ciano luminose per le esplorazioni notturne.",
+    description: "Visore ciano luminoso per le esplorazioni notturne.",
     previewColor: "#38bdf8",
     requirement: {
       type: "easter_egg",
@@ -120,21 +162,61 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
       eggTitle: "Notte di Lilibeo",
     },
   },
+  {
+    id: "glasses-monocle",
+    slot: "glasses",
+    name: "Monocolo del Cantiniere",
+    description: "Monocolo d’oro ottocentesco dei maestri del vino Marsala.",
+    previewColor: "#eab308",
+    requirement: {
+      type: "easter_egg",
+      eggId: "woodhouse-1773",
+      eggTitle: "Cantina Woodhouse 1773",
+    },
+  },
+  {
+    id: "glasses-gameboy",
+    slot: "glasses",
+    name: "Visore Fosforo DMG-01",
+    description: "Lenti verde matrice anni ’89.",
+    previewColor: "#65a30d",
+    requirement: {
+      type: "easter_egg",
+      eggId: "konami-gameboy",
+      eggTitle: "Modalità Game Boy",
+    },
+  },
 
-  // --- MAGLIE ---
+  // --- MAGLIE & GIUBBE (8) ---
   {
     id: "top-explorer",
     slot: "top",
     name: "Giacca Esploratore",
-    description: "Divisa ufficiale per mappare Marsala.",
+    description: "Divisa blu cobalto ufficiale per mappare Marsala.",
     previewColor: "#2563eb",
     requirement: { type: "default" },
+  },
+  {
+    id: "top-striped-sailor",
+    slot: "top",
+    name: "Maglia Marinara",
+    description: "T-shirt a righe bianche e blu della costa marsalese.",
+    previewColor: "#0284c7",
+    requirement: { type: "default" },
+  },
+  {
+    id: "top-linen-white",
+    slot: "top",
+    name: "Camicia di Lino Bianca",
+    description: "Fresca camicia estiva per passeggiare lungo il Cassaro.",
+    previewColor: "#f1f5f9",
+    requirement: { type: "cards", count: 3 },
   },
   {
     id: "top-garibaldi",
     slot: "top",
     name: "Camicia Rossa 1860",
-    description: "La leggendaria giubba dei Mille di Garibaldi.",
+    description: "La leggendaria giubba dei Mille con bottoni dorati.",
     previewColor: "#b91c1c",
     requirement: {
       type: "easter_egg",
@@ -170,7 +252,7 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     id: "top-cassaro",
     slot: "top",
     name: "Mantello del Cassaro",
-    description: "Abito nobile del centro storico di Marsala.",
+    description: "Abito nobile viola con bordi dorati del centro storico.",
     previewColor: "#7c3aed",
     requirement: {
       type: "easter_egg",
@@ -187,7 +269,7 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     requirement: { type: "prestige", level: 1 },
   },
 
-  // --- PANTALONI ---
+  // --- PANTALONI & TUNICHE (7) ---
   {
     id: "bottom-jeans",
     slot: "bottom",
@@ -197,18 +279,27 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     requirement: { type: "default" },
   },
   {
+    id: "bottom-shorts-sand",
+    slot: "bottom",
+    name: "Bermuda Sabbia",
+    description: "Pantaloncini leggeri color sabbia per le giornate di sole.",
+    previewColor: "#d6b88d",
+    requirement: { type: "default" },
+  },
+  {
     id: "bottom-cargo",
     slot: "bottom",
     name: "Pantaloni Cargo Lilibeo",
-    description: "Multitasche per custodire le Trading Card.",
+    description: "Multitasche verde oliva per custodire le Trading Card.",
     previewColor: "#4d7c0f",
-    requirement: { type: "cards", count: 4 },
+    requirement: { type: "cards", count: 6 },
   },
   {
     id: "bottom-punic",
     slot: "bottom",
     name: "Tunica Punica 397 a.C.",
-    description: "Veste degli antichi navigatori fenici di Mozia.",
+    description:
+      "Veste azzurra con fascia d’oro dei navigatori fenici di Mozia.",
     previewColor: "#0284c7",
     requirement: {
       type: "easter_egg",
@@ -220,7 +311,7 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     id: "bottom-sibilla",
     slot: "bottom",
     name: "Veste della Sibilla",
-    description: "Stoffa mistica dell’antro di Capo Boeo.",
+    description: "Stoffa mistica viola dell’antro di Capo Boeo.",
     previewColor: "#9333ea",
     requirement: {
       type: "easter_egg",
@@ -239,6 +330,14 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
       eggId: "konami-gameboy",
       eggTitle: "Modalità Game Boy",
     },
+  },
+  {
+    id: "bottom-gold-greaves",
+    slot: "bottom",
+    name: "Gambali Regali ★",
+    description: "Schinieri dorati riservati alle leggende Prestigio.",
+    previewColor: "#f59e0b",
+    requirement: { type: "prestige", level: 1 },
   },
 ];
 

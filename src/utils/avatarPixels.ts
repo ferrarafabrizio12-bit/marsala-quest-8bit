@@ -1,334 +1,331 @@
-import type { AvatarConfig } from '../../shared/cosmetics';
+import {
+  type AvatarConfig,
+  sanitizeAvatarConfig,
+} from "../../shared/cosmetics";
 
-export interface PixelRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  fill: string;
-}
+const COLS = 16;
+const ROWS = 20;
 
-const SKIN = '#ffcdb2';
-const SKIN_SHADE = '#e5989b';
+const SKIN = "#f6c29f";
+const SKIN_SHADE = "#dc9b72";
+const HAIR_MALE = "#4a2c18";
+const HAIR_FEMALE = "#6b3410";
+const EYE = "#0f172a";
+const BOOT = "#1e293b";
+const BOOT_SOLE = "#090d16";
 
-function getBottomRects(bottomId: string): PixelRect[] {
-  switch (bottomId) {
-    case 'bottom-shorts':
-      return [
-        { x: 4, y: 14, w: 8, h: 1, fill: '#0284c7' },
-        { x: 4, y: 15, w: 3, h: 2, fill: '#0ea5e9' },
-        { x: 9, y: 15, w: 3, h: 2, fill: '#0ea5e9' },
-        { x: 5, y: 17, w: 2, h: 1, fill: SKIN },
-        { x: 9, y: 17, w: 2, h: 1, fill: SKIN },
-        { x: 4, y: 18, w: 3, h: 2, fill: '#f8fafc' },
-        { x: 9, y: 18, w: 3, h: 2, fill: '#f8fafc' },
-      ];
-    case 'bottom-cargo':
-      return [
-        { x: 4, y: 14, w: 8, h: 1, fill: '#3f6212' },
-        { x: 4, y: 15, w: 3, h: 3, fill: '#65a30d' },
-        { x: 9, y: 15, w: 3, h: 3, fill: '#65a30d' },
-        { x: 4, y: 16, w: 1, h: 1, fill: '#4d7c0f' },
-        { x: 11, y: 16, w: 1, h: 1, fill: '#4d7c0f' },
-        { x: 4, y: 18, w: 3, h: 2, fill: '#451a03' },
-        { x: 9, y: 18, w: 3, h: 2, fill: '#451a03' },
-      ];
-    case 'bottom-garibaldi':
-      return [
-        { x: 4, y: 14, w: 8, h: 1, fill: '#1e293b' },
-        { x: 4, y: 15, w: 3, h: 3, fill: '#64748b' },
-        { x: 9, y: 15, w: 3, h: 3, fill: '#64748b' },
-        { x: 4, y: 15, w: 1, h: 3, fill: '#dc2626' },
-        { x: 11, y: 15, w: 1, h: 3, fill: '#dc2626' },
-        { x: 4, y: 18, w: 3, h: 2, fill: '#0f172a' },
-        { x: 9, y: 18, w: 3, h: 2, fill: '#0f172a' },
-      ];
-    case 'bottom-punico':
-      return [
-        { x: 4, y: 14, w: 8, h: 2, fill: '#fef3c7' },
-        { x: 4, y: 15, w: 8, h: 1, fill: '#b45309' },
-        { x: 5, y: 16, w: 2, h: 2, fill: SKIN },
-        { x: 9, y: 16, w: 2, h: 2, fill: SKIN },
-        { x: 4, y: 18, w: 3, h: 2, fill: '#92400e' },
-        { x: 9, y: 18, w: 3, h: 2, fill: '#92400e' },
-        { x: 5, y: 18, w: 1, h: 1, fill: '#ffd166' },
-        { x: 10, y: 18, w: 1, h: 1, fill: '#ffd166' },
-      ];
-    case 'bottom-oro':
-      return [
-        { x: 4, y: 14, w: 8, h: 1, fill: '#b45309' },
-        { x: 7, y: 14, w: 2, h: 1, fill: '#fef08a' },
-        { x: 4, y: 15, w: 3, h: 3, fill: '#f59e0b' },
-        { x: 9, y: 15, w: 3, h: 3, fill: '#f59e0b' },
-        { x: 5, y: 15, w: 1, h: 2, fill: '#fef08a' },
-        { x: 10, y: 15, w: 1, h: 2, fill: '#fef08a' },
-        { x: 4, y: 18, w: 3, h: 2, fill: '#78350f' },
-        { x: 9, y: 18, w: 3, h: 2, fill: '#78350f' },
-      ];
-    case 'bottom-jeans':
-    default:
-      return [
-        { x: 4, y: 14, w: 8, h: 1, fill: '#1e3a8a' },
-        { x: 4, y: 15, w: 3, h: 3, fill: '#2563eb' },
-        { x: 9, y: 15, w: 3, h: 3, fill: '#2563eb' },
-        { x: 4, y: 18, w: 3, h: 2, fill: '#0f172a' },
-        { x: 9, y: 18, w: 3, h: 2, fill: '#0f172a' },
-      ];
-  }
-}
-
-function getTopRects(topId: string): PixelRect[] {
-  const hands: PixelRect[] = [
-    { x: 3, y: 13, w: 1, h: 1, fill: SKIN },
-    { x: 12, y: 13, w: 1, h: 1, fill: SKIN },
-    { x: 7, y: 9, w: 2, h: 1, fill: SKIN },
-  ];
-
-  switch (topId) {
-    case 'top-sole':
-      return [
-        { x: 4, y: 9, w: 8, h: 5, fill: '#facc15' },
-        { x: 3, y: 9, w: 1, h: 3, fill: '#eab308' },
-        { x: 12, y: 9, w: 1, h: 3, fill: '#eab308' },
-        { x: 3, y: 12, w: 1, h: 1, fill: SKIN },
-        { x: 12, y: 12, w: 1, h: 1, fill: SKIN },
-        { x: 6, y: 11, w: 4, h: 1, fill: '#ea580c' },
-        ...hands,
-      ];
-    case 'top-garibaldi':
-      return [
-        { x: 4, y: 9, w: 8, h: 5, fill: '#dc2626' },
-        { x: 3, y: 9, w: 1, h: 4, fill: '#b91c1c' },
-        { x: 12, y: 9, w: 1, h: 4, fill: '#b91c1c' },
-        // Fazzoletto al collo + bottoni dorati
-        { x: 6, y: 9, w: 4, h: 2, fill: '#1e293b' },
-        { x: 7, y: 11, w: 2, h: 1, fill: '#ffd166' },
-        { x: 7, y: 13, w: 2, h: 1, fill: '#ffd166' },
-        ...hands,
-      ];
-    case 'top-cantiniere':
-      return [
-        { x: 4, y: 9, w: 8, h: 5, fill: '#881337' },
-        { x: 3, y: 9, w: 1, h: 4, fill: '#f8fafc' },
-        { x: 12, y: 9, w: 1, h: 4, fill: '#f8fafc' },
-        { x: 6, y: 9, w: 4, h: 2, fill: '#f8fafc' },
-        { x: 7, y: 10, w: 2, h: 1, fill: '#0f172a' },
-        { x: 7, y: 12, w: 2, h: 1, fill: '#ffd166' },
-        ...hands,
-      ];
-    case 'top-kite':
-      return [
-        { x: 4, y: 9, w: 8, h: 5, fill: '#0f172a' },
-        { x: 3, y: 9, w: 1, h: 4, fill: '#06b6d4' },
-        { x: 12, y: 9, w: 1, h: 4, fill: '#06b6d4' },
-        { x: 5, y: 10, w: 6, h: 1, fill: '#38e54d' },
-        { x: 6, y: 12, w: 4, h: 1, fill: '#06b6d4' },
-        ...hands,
-      ];
-    case 'top-cassaro':
-      return [
-        { x: 4, y: 9, w: 8, h: 5, fill: '#6d28d9' },
-        { x: 3, y: 9, w: 1, h: 4, fill: '#5b21b6' },
-        { x: 12, y: 9, w: 1, h: 4, fill: '#5b21b6' },
-        { x: 7, y: 9, w: 2, h: 5, fill: '#ffd166' },
-        ...hands,
-      ];
-    case 'top-oro':
-      return [
-        { x: 4, y: 9, w: 8, h: 5, fill: '#f59e0b' },
-        { x: 3, y: 9, w: 1, h: 4, fill: '#d97706' },
-        { x: 12, y: 9, w: 1, h: 4, fill: '#d97706' },
-        { x: 6, y: 10, w: 4, h: 3, fill: '#fef08a' },
-        { x: 7, y: 11, w: 2, h: 1, fill: '#b91c1c' },
-        ...hands,
-      ];
-      case 'top-prestige-cape':
-    return [
-      { x: 3, y: 9, w: 1, h: 5, fill: '#a21caf' },
-      { x: 12, y: 9, w: 1, h: 5, fill: '#a21caf' },
-      { x: 4, y: 9, w: 8, h: 5, fill: '#c026d3' },
-      { x: 3, y: 9, w: 2, h: 1, fill: '#ffd166' },
-      { x: 11, y: 9, w: 2, h: 1, fill: '#ffd166' },
-      { x: 7, y: 9, w: 2, h: 5, fill: '#fef08a' },
-      ...hands,
-    ];
-    case 'top-explorer':
-    default:
-      return [
-        { x: 4, y: 9, w: 8, h: 5, fill: '#4cc9f0' },
-        { x: 3, y: 9, w: 1, h: 4, fill: '#38bdf8' },
-        { x: 12, y: 9, w: 1, h: 4, fill: '#38bdf8' },
-        { x: 5, y: 11, w: 6, h: 1, fill: '#0284c7' },
-        ...hands,
-      ];
-  }
-}
-
-function getGlassesRects(glassesId: string): PixelRect[] {
-  switch (glassesId) {
-    case 'glasses-pixel':
-      return [
-        { x: 4, y: 6, w: 8, h: 1, fill: '#000000' },
-        { x: 5, y: 6, w: 2, h: 2, fill: '#000000' },
-        { x: 9, y: 6, w: 2, h: 2, fill: '#000000' },
-        { x: 5, y: 6, w: 1, h: 1, fill: '#ffffff' },
-        { x: 9, y: 6, w: 1, h: 1, fill: '#ffffff' },
-      ];
-    case 'glasses-gameboy':
-      return [
-        { x: 4, y: 5, w: 8, h: 3, fill: '#1e293b' },
-        { x: 5, y: 6, w: 6, h: 1, fill: '#a3e635' },
-        { x: 6, y: 6, w: 1, h: 1, fill: '#ecfccb' },
-      ];
-    case 'glasses-sunset':
-      return [
-        { x: 4, y: 6, w: 8, h: 1, fill: '#ffd166' },
-        { x: 5, y: 6, w: 2, h: 2, fill: '#fb7185' },
-        { x: 9, y: 6, w: 2, h: 2, fill: '#fb7185' },
-        { x: 5, y: 6, w: 1, h: 1, fill: '#fde047' },
-        { x: 9, y: 6, w: 1, h: 1, fill: '#fde047' },
-      ];
-    case 'glasses-neon':
-      return [
-        { x: 4, y: 5, w: 8, h: 3, fill: '#0f172a' },
-        { x: 5, y: 6, w: 2, h: 1, fill: '#22d3ee' },
-        { x: 9, y: 6, w: 2, h: 1, fill: '#f43f5e' },
-        { x: 7, y: 6, w: 2, h: 1, fill: '#a855f7' },
-      ];
-      case 'glasses-holo':
-    return [
-      { x: 4, y: 5, w: 8, h: 3, fill: '#f0abfc' },
-      { x: 5, y: 6, w: 2, h: 1, fill: '#38bdf8' },
-      { x: 7, y: 6, w: 2, h: 1, fill: '#fef08a' },
-      { x: 9, y: 6, w: 2, h: 1, fill: '#f43f5e' },
-    ];
-    case 'glasses-none':
-    default:
-      return [];
-  }
-}
-
-function getHatRects(hatId: string): PixelRect[] {
-  switch (hatId) {
-    case 'hat-cap-red':
-      return [
-        { x: 4, y: 1, w: 8, h: 2, fill: '#ff4d6d' },
-        { x: 3, y: 3, w: 11, h: 1, fill: '#e11d48' },
-        { x: 7, y: 2, w: 2, h: 1, fill: '#ffd166' },
-      ];
-    case 'hat-paglia':
-      return [
-        { x: 5, y: 1, w: 6, h: 2, fill: '#fde047' },
-        { x: 5, y: 2, w: 6, h: 1, fill: '#b91c1c' },
-        { x: 2, y: 3, w: 12, h: 1, fill: '#eab308' },
-      ];
-    case 'hat-garibaldi':
-      return [
-        { x: 4, y: 1, w: 8, h: 2, fill: '#dc2626' },
-        { x: 4, y: 2, w: 8, h: 1, fill: '#ffd166' },
-        { x: 3, y: 3, w: 10, h: 1, fill: '#111827' },
-      ];
-    case 'hat-woodhouse':
-      return [
-        { x: 5, y: 0, w: 6, h: 3, fill: '#1e293b' },
-        { x: 5, y: 2, w: 6, h: 1, fill: '#b91c1c' },
-        { x: 3, y: 3, w: 10, h: 1, fill: '#0f172a' },
-      ];
-    case 'hat-sibilla':
-      return [
-        { x: 4, y: 2, w: 2, h: 1, fill: '#22c55e' },
-        { x: 10, y: 2, w: 2, h: 1, fill: '#22c55e' },
-        { x: 5, y: 3, w: 6, h: 1, fill: '#4ade80' },
-        { x: 7, y: 2, w: 2, h: 1, fill: '#ffd166' },
-      ];
-    case 'hat-punico':
-      return [
-        { x: 6, y: 0, w: 4, h: 1, fill: '#dc2626' },
-        { x: 5, y: 1, w: 6, h: 1, fill: '#ef4444' },
-        { x: 4, y: 2, w: 8, h: 2, fill: '#d97706' },
-        { x: 6, y: 2, w: 4, h: 1, fill: '#fef08a' },
-      ];
-    case 'hat-corona-lilibeo':
-      return [
-        { x: 4, y: 1, w: 2, h: 1, fill: '#ffd166' },
-        { x: 7, y: 1, w: 2, h: 1, fill: '#ffd166' },
-        { x: 10, y: 1, w: 2, h: 1, fill: '#ffd166' },
-        { x: 4, y: 2, w: 8, h: 2, fill: '#f59e0b' },
-        { x: 7, y: 2, w: 2, h: 1, fill: '#ef4444' },
-      ];
-    case 'hat-none':
-    default:
-      return [];
-  }
-}
-
-export function getAvatarPixelRects(avatar: AvatarConfig): PixelRect[] {
-  const rects: PixelRect[] = [];
-  const hairColor = avatar.gender === 'female' ? '#6b3e26' : '#3b2416';
-
-  // 1. Capelli posteriori (per base Lei)
-  if (avatar.gender === 'female') {
-    rects.push(
-      { x: 3, y: 4, w: 2, h: 7, fill: hairColor },
-      { x: 11, y: 4, w: 2, h: 7, fill: hairColor }
-    );
-  }
-
-  // 2. Pantaloni & scarpe
-  rects.push(...getBottomRects(avatar.bottom));
-
-  // 3. Maglia & braccia
-  rects.push(...getTopRects(avatar.top));
-
-  // 4. Viso
-  rects.push(
-    { x: 5, y: 4, w: 6, h: 5, fill: SKIN },
-    { x: 6, y: 6, w: 1, h: 1, fill: '#111827' },
-    { x: 9, y: 6, w: 1, h: 1, fill: '#111827' }
+export function buildAvatarPixelGrid(
+  rawAvatar: AvatarConfig,
+): (string | null)[][] {
+  const avatar = sanitizeAvatarConfig(rawAvatar);
+  const grid: (string | null)[][] = Array.from({ length: ROWS }, () =>
+    Array<string | null>(COLS).fill(null),
   );
 
-  if (avatar.gender === 'female') {
-    rects.push(
-      { x: 5, y: 7, w: 1, h: 1, fill: SKIN_SHADE },
-      { x: 10, y: 7, w: 1, h: 1, fill: SKIN_SHADE }
-    );
-  }
+  const setPx = (x: number, y: number, color: string) => {
+    if (x >= 0 && x < COLS && y >= 0 && y < ROWS) {
+      grid[y][x] = color;
+    }
+  };
 
-  // 5. Capelli frontali
-  if (avatar.gender === 'female') {
-    rects.push(
-      { x: 4, y: 3, w: 8, h: 2, fill: hairColor },
-      { x: 4, y: 4, w: 1, h: 4, fill: hairColor },
-      { x: 11, y: 4, w: 1, h: 4, fill: hairColor }
-    );
+  const fillRect = (
+    x0: number,
+    y0: number,
+    w: number,
+    h: number,
+    color: string,
+  ) => {
+    for (let y = y0; y < y0 + h; y++) {
+      for (let x = x0; x < x0 + w; x++) {
+        setPx(x, y, color);
+      }
+    }
+  };
+
+  const isFemale = avatar.gender === "female";
+  const hairColor = isFemale ? HAIR_FEMALE : HAIR_MALE;
+
+  // 1. TESTA & CAPELLI BASE
+  fillRect(5, 4, 6, 5, SKIN);
+  fillRect(5, 8, 6, 1, SKIN_SHADE); // mento
+  setPx(6, 6, EYE);
+  setPx(9, 6, EYE);
+
+  // Capelli laterali / lunghi
+  setPx(4, 5, hairColor);
+  setPx(11, 5, hairColor);
+  if (isFemale) {
+    fillRect(3, 5, 2, 6, hairColor);
+    fillRect(11, 5, 2, 6, hairColor);
   } else {
-    rects.push(
-      { x: 4, y: 3, w: 8, h: 2, fill: hairColor },
-      { x: 4, y: 5, w: 1, h: 1, fill: hairColor },
-      { x: 11, y: 5, w: 1, h: 1, fill: hairColor }
-    );
+    setPx(4, 6, hairColor);
+    setPx(11, 6, hairColor);
   }
 
-  // 6. Occhiali
-  rects.push(...getGlassesRects(avatar.glasses));
+  // 2. CAPPELLI (righe 0..4)
+  switch (avatar.hat) {
+    case "hat-cap-red": {
+      fillRect(5, 1, 6, 1, "#ef4444");
+      fillRect(4, 2, 8, 2, "#ef4444");
+      fillRect(7, 2, 2, 1, "#ffffff"); // stemma bianco
+      fillRect(4, 4, 10, 1, "#b91c1c"); // visiera sporgente a destra
+      break;
+    }
+    case "hat-straw": {
+      fillRect(5, 1, 6, 2, "#fde047");
+      fillRect(5, 3, 6, 1, "#dc2626"); // nastro rosso
+      fillRect(2, 4, 12, 1, "#eab308"); // tesa larga di paglia
+      break;
+    }
+    case "hat-sailor": {
+      fillRect(4, 1, 8, 2, "#f8fafc");
+      fillRect(7, 2, 2, 1, "#facc15"); // ancora oro
+      fillRect(4, 3, 8, 1, "#1e3a8a"); // fascia blu marina
+      fillRect(4, 4, 9, 1, "#0f172a"); // visiera scura
+      break;
+    }
+    case "hat-beret-red": {
+      fillRect(4, 1, 8, 1, "#dc2626");
+      fillRect(3, 2, 9, 2, "#b91c1c");
+      setPx(5, 2, "#ffd166"); // fregio garibaldino
+      fillRect(4, 4, 8, 1, "#7f1d1d");
+      break;
+    }
+    case "hat-punic-helm": {
+      fillRect(6, 0, 4, 1, "#38bdf8"); // cresta fenicia
+      fillRect(5, 1, 6, 1, "#0284c7");
+      fillRect(4, 2, 8, 2, "#d97706"); // calotta bronzo
+      fillRect(4, 4, 8, 1, "#b45309");
+      setPx(4, 5, "#b45309"); // paraguance
+      setPx(11, 5, "#b45309");
+      break;
+    }
+    case "hat-bandana-kite": {
+      fillRect(5, 2, 6, 2, hairColor);
+      fillRect(4, 4, 8, 1, "#10b981"); // fascia smeraldo
+      setPx(2, 4, "#34d399"); // nodo svolazzante
+      setPx(3, 5, "#059669");
+      break;
+    }
+    case "hat-crown-gold": {
+      setPx(4, 1, "#ffd166");
+      fillRect(7, 1, 2, 1, "#ffd166");
+      setPx(11, 1, "#ffd166");
+      fillRect(4, 2, 8, 2, "#f59e0b");
+      setPx(6, 2, "#ef4444"); // rubino
+      setPx(9, 2, "#38bdf8"); // zaffiro
+      fillRect(4, 4, 8, 1, "#b45309");
+      break;
+    }
+    case "hat-none":
+    default: {
+      fillRect(5, 2, 6, 2, hairColor);
+      fillRect(4, 3, 8, 1, hairColor);
+      setPx(6, 4, hairColor);
+      setPx(9, 4, hairColor);
+      break;
+    }
+  }
 
-  // 7. Cappello
-  rects.push(...getHatRects(avatar.hat));
+  // 3. OCCHIALI & VISORI (righe 6..7)
+  switch (avatar.glasses) {
+    case "glasses-pixel": {
+      fillRect(5, 6, 3, 2, "#090d16");
+      fillRect(8, 6, 3, 2, "#090d16");
+      setPx(5, 6, "#94a3b8");
+      setPx(8, 6, "#94a3b8");
+      break;
+    }
+    case "glasses-aviator": {
+      fillRect(5, 6, 3, 2, "#1e293b");
+      fillRect(8, 6, 3, 2, "#1e293b");
+      setPx(7, 6, "#facc15"); // ponte oro
+      setPx(8, 6, "#facc15");
+      break;
+    }
+    case "glasses-sunset": {
+      fillRect(5, 6, 3, 2, "#f97316");
+      fillRect(8, 6, 3, 2, "#fb923c");
+      setPx(7, 6, "#ffd166");
+      setPx(8, 6, "#ffd166");
+      break;
+    }
+    case "glasses-neon": {
+      fillRect(4, 6, 8, 2, "#22d3ee");
+      fillRect(5, 6, 6, 1, "#cffafe");
+      break;
+    }
+    case "glasses-monocle": {
+      fillRect(8, 6, 3, 2, "#fef08a");
+      setPx(9, 6, EYE);
+      setPx(11, 7, "#eab308"); // catenella oro
+      setPx(11, 8, "#eab308");
+      setPx(11, 9, "#eab308");
+      break;
+    }
+    case "glasses-gameboy": {
+      fillRect(5, 6, 3, 2, "#365314");
+      fillRect(8, 6, 3, 2, "#365314");
+      setPx(6, 6, "#a3e635");
+      setPx(9, 6, "#a3e635");
+      break;
+    }
+    case "glasses-none":
+    default:
+      break;
+  }
 
-  return rects;
+  // 4. COLLO (riga 9)
+  fillRect(6, 9, 4, 1, SKIN_SHADE);
+
+  // 5. MAGLIE, GIUBBE & ARMATURE (righe 10..14)
+  let sleeveColor = "#2563eb";
+  switch (avatar.top) {
+    case "top-striped-sailor": {
+      sleeveColor = "#f8fafc";
+      fillRect(4, 10, 8, 5, "#f8fafc");
+      fillRect(4, 11, 8, 1, "#1d4ed8");
+      fillRect(4, 13, 8, 1, "#1d4ed8");
+      break;
+    }
+    case "top-linen-white": {
+      sleeveColor = "#f1f5f9";
+      fillRect(4, 10, 8, 5, "#f1f5f9");
+      fillRect(7, 10, 2, 2, SKIN); // colletto aperto
+      fillRect(4, 14, 8, 1, "#cbd5e1");
+      break;
+    }
+    case "top-garibaldi": {
+      sleeveColor = "#b91c1c";
+      fillRect(4, 10, 8, 5, "#dc2626");
+      fillRect(7, 10, 2, 5, "#991b1b");
+      setPx(7, 11, "#ffd166");
+      setPx(7, 13, "#ffd166");
+      break;
+    }
+    case "top-winemaker": {
+      sleeveColor = "#fef3c7";
+      fillRect(4, 10, 8, 5, "#fef3c7");
+      fillRect(5, 11, 6, 4, "#78350f"); // grembiule marrone
+      fillRect(5, 10, 1, 1, "#78350f");
+      fillRect(10, 10, 1, 1, "#78350f");
+      break;
+    }
+    case "top-kitesurf": {
+      sleeveColor = "#0f172a";
+      fillRect(4, 10, 8, 5, "#0f172a");
+      fillRect(5, 10, 6, 4, "#10b981");
+      fillRect(7, 10, 2, 5, "#22d3ee");
+      break;
+    }
+    case "top-cassaro": {
+      sleeveColor = "#6d28d9";
+      fillRect(4, 10, 8, 5, "#7c3aed");
+      fillRect(7, 10, 2, 5, "#ffd166");
+      fillRect(4, 10, 8, 1, "#f59e0b");
+      break;
+    }
+    case "top-holo": {
+      sleeveColor = "#c026d3";
+      fillRect(4, 10, 8, 5, "#e879f9");
+      fillRect(5, 11, 6, 3, "#38bdf8");
+      fillRect(7, 11, 2, 2, "#ffd166");
+      break;
+    }
+    case "top-explorer":
+    default: {
+      sleeveColor = "#1d4ed8";
+      fillRect(4, 10, 8, 5, "#2563eb");
+      fillRect(7, 10, 2, 5, "#60a5fa");
+      setPx(5, 12, "#ffd166");
+      setPx(10, 12, "#ffd166");
+      break;
+    }
+  }
+
+  // Braccia & mani
+  fillRect(2, 10, 2, 4, sleeveColor);
+  fillRect(12, 10, 2, 4, sleeveColor);
+  fillRect(2, 14, 2, 1, SKIN);
+  fillRect(12, 14, 2, 1, SKIN);
+
+  // 6. PANTALONI & TUNICHE (righe 15..18)
+  switch (avatar.bottom) {
+    case "bottom-shorts-sand": {
+      fillRect(4, 15, 8, 2, "#d6b88d");
+      fillRect(5, 17, 2, 2, SKIN); // gambe scoperte
+      fillRect(9, 17, 2, 2, SKIN);
+      break;
+    }
+    case "bottom-cargo": {
+      fillRect(4, 15, 8, 1, "#3f6212");
+      fillRect(4, 16, 3, 3, "#4d7c0f");
+      fillRect(9, 16, 3, 3, "#4d7c0f");
+      setPx(4, 17, "#84cc16"); // tasche laterali
+      setPx(11, 17, "#84cc16");
+      break;
+    }
+    case "bottom-punic": {
+      fillRect(4, 15, 8, 1, "#ffd166"); // cintura dorata fenicia
+      fillRect(4, 16, 8, 3, "#0284c7");
+      fillRect(7, 17, 2, 2, "#38bdf8");
+      break;
+    }
+    case "bottom-sibilla": {
+      fillRect(4, 15, 8, 4, "#7e22ce");
+      fillRect(4, 18, 8, 1, "#ffd166"); // bordo dorato
+      break;
+    }
+    case "bottom-gameboy": {
+      fillRect(4, 15, 8, 1, "#365314");
+      fillRect(4, 16, 3, 3, "#4d7c0f");
+      fillRect(9, 16, 3, 3, "#4d7c0f");
+      break;
+    }
+    case "bottom-gold-greaves": {
+      fillRect(4, 15, 8, 1, "#b45309");
+      fillRect(4, 16, 3, 3, "#f59e0b");
+      fillRect(9, 16, 3, 3, "#f59e0b");
+      setPx(5, 17, "#fef08a");
+      setPx(10, 17, "#fef08a");
+      break;
+    }
+    case "bottom-jeans":
+    default: {
+      fillRect(4, 15, 8, 1, "#1e3a8a");
+      fillRect(4, 16, 3, 3, "#1d4ed8");
+      fillRect(9, 16, 3, 3, "#1d4ed8");
+      break;
+    }
+  }
+
+  // 7. SCARPONCINI (riga 19)
+  fillRect(4, 19, 3, 1, BOOT);
+  fillRect(9, 19, 3, 1, BOOT);
+  setPx(4, 19, BOOT_SOLE);
+  setPx(11, 19, BOOT_SOLE);
+
+  return grid;
 }
 
 export function renderAvatarSvgString(
   avatar: AvatarConfig,
-  width = 34,
-  height = 42
+  width = 36,
+  height = 45,
 ): string {
-  const rects = getAvatarPixelRects(avatar)
-    .map(
-      (r) =>
-        `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${r.fill}" />`
-    )
-    .join('');
+  const grid = buildAvatarPixelGrid(avatar);
+  const rects: string[] = [];
 
-  return `<svg width="${width}" height="${height}" viewBox="0 0 16 20" xmlns="http://www.w3.org/2000/svg" style="image-rendering: pixelated; filter: drop-shadow(2px 2px 0 #000);">${rects}</svg>`;
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const fill = grid[y][x];
+      if (fill) {
+        rects.push(
+          `<rect x="${x}" y="${y}" width="1" height="1" fill="${fill}"/>`,
+        );
+      }
+    }
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${COLS} ${ROWS}" shape-rendering="crispEdges">${rects.join("")}</svg>`;
 }

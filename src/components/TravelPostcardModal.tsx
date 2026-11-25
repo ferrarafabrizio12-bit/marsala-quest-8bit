@@ -44,8 +44,8 @@ function latToTileY(lat: number, zoom: number): number {
 }
 
 /**
- * Renderizza la mappa reale di Marsala (tasselli Esri via proxy CORS-safe + puzzle Voronoi
- * colorato per i POI sbloccati / grigio per i POI mancanti + i 20 marker).
+ * Renderizza la mappa reale OpenStreetMap di Marsala (tasselli via proxy CORS-safe +
+ * puzzle Voronoi colorato per i POI sbloccati / grigio per i POI mancanti + i 20 marker).
  */
 async function renderMarsalaRealMapSnapshot(
   width: number,
@@ -62,12 +62,11 @@ async function renderMarsalaRealMapSnapshot(
 
   const lats = MARSALA_POIS.map((p) => p.lat);
   const lngs = MARSALA_POIS.map((p) => p.lng);
-  const minLat = Math.min(...lats) - 0.014;
-  const maxLat = Math.max(...lats) + 0.014;
+  const minLat = Math.min(...lats) - 0.012;
+  const maxLat = Math.max(...lats) + 0.012;
   const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
 
-  // Zoom 12: 12 tasselli totali ad alta definizione (~265px/tile) che coprono l'intera Marsala senza ritardi
-  const zoom = 12;
+  const zoom = 13;
   const topTy = latToTileY(maxLat, zoom);
   const bottomTy = latToTileY(minLat, zoom);
   const spanY = bottomTy - topTy;
@@ -84,11 +83,11 @@ async function renderMarsalaRealMapSnapshot(
     y: (latToTileY(lat, zoom) - topTy) * tilePxSize,
   });
 
-  // 1. Scarica e disegna tutti i tasselli reali della mappa di Marsala tramite il proxy backend
-  const startTx = Math.floor(leftTx);
-  const endTx = Math.floor(rightTx);
-  const startTy = Math.floor(topTy);
-  const endTy = Math.floor(bottomTy);
+  // 1. Scarica e disegna tutti i tasselli OpenStreetMap di Marsala (con margine extra per coprire ogni bordo)
+  const startTx = Math.floor(leftTx) - 1;
+  const endTx = Math.ceil(rightTx) + 1;
+  const startTy = Math.floor(topTy) - 1;
+  const endTy = Math.ceil(bottomTy) + 1;
 
   const tileJobs: Array<
     Promise<{ img: HTMLImageElement; tx: number; ty: number } | null>
@@ -384,7 +383,7 @@ export const TravelPostcardModal: React.FC<TravelPostcardModalProps> = ({
         434,
       );
 
-      // Mappa reale di Marsala con tasselli Esri + puzzle colorato
+      // Mappa reale OpenStreetMap di Marsala con puzzle colorato
       const mapX = 76;
       const mapY = 486;
       const mapW = W - 152;
