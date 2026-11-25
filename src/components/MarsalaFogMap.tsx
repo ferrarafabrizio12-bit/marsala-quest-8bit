@@ -480,7 +480,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     onSelectPoi,
   ]);
 
-  // Avatar giocatore + Freccia direzionale che parte dal centro dell'omino
+  // Avatar giocatore + Freccia direzionale (sempre sotto l'omino)
   useEffect(() => {
     const map = mainMapRef.current;
     if (!map || gps.lat === null || gps.lng === null) return;
@@ -497,43 +497,32 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
           ? computeBearing(gps.lat, gps.lng, fallbackAim[0], fallbackAim[1])
           : 0;
 
-    // Freccia che nasce dal centro del busto dell'omino (50, 50) e punta nella direzione del telefono
+    // Freccia compatta (84x84) che parte dal centro dell'omino dietro allo sprite (z-index: 1)
     const arrowHtml = `
       <div style="
         position: absolute;
-        top: 22px;
+        top: 24px;
         left: 50%;
-        width: 108px;
-        height: 108px;
+        width: 84px;
+        height: 84px;
         transform: translate(-50%, -50%) rotate(${arrowDeg}deg);
         transition: transform 160ms linear;
         pointer-events: none;
-        z-index: 3;
+        z-index: 1;
       ">
-        <svg viewBox="0 0 108 108" width="108" height="108">
-          <!-- Asta della freccia che parte dal centro (54, 54) -->
+        <svg viewBox="0 0 84 84" width="84" height="84">
           <rect
-            x="51"
-            y="21"
-            width="6"
-            height="33"
+            x="39.75"
+            y="16"
+            width="4.5"
+            height="26"
             fill="#ffd166"
             stroke="#000000"
-            stroke-width="2"
+            stroke-width="1.8"
           />
-          <!-- Punta della freccia -->
           <polygon
-            points="54,6 42,23 66,23"
+            points="42,4 33,17 51,17"
             fill="#ff4d6d"
-            stroke="#000000"
-            stroke-width="2.2"
-          />
-          <!-- Perno centrale sull'omino -->
-          <circle
-            cx="54"
-            cy="54"
-            r="4.5"
-            fill="#ffd166"
             stroke="#000000"
             stroke-width="2"
           />
@@ -549,7 +538,8 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
           class="flex flex-col items-center"
           title="Tocca per personalizzare il tuo Look"
         >
-          <div style="position: relative; z-index: 2;" class="flex flex-col items-center">
+          ${arrowHtml}
+          <div style="position: relative; z-index: 10;" class="flex flex-col items-center">
             ${avatarSvg}
             <span style="
               margin-top: -2px;
@@ -562,7 +552,6 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
               box-shadow: 2px 2px 0 #000;
             ">TU</span>
           </div>
-          ${arrowHtml}
         </div>
       `,
       iconSize: [0, 0],
