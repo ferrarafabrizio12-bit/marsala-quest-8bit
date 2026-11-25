@@ -9,6 +9,14 @@ export interface AvatarConfig {
   bottom: string;
 }
 
+export const DEFAULT_AVATAR: AvatarConfig = {
+  gender: "male",
+  hat: "hat-cap-red",
+  glasses: "glasses-none",
+  top: "top-explorer",
+  bottom: "bottom-jeans",
+};
+
 export type CosmeticRequirement =
   | { type: "default" }
   | { type: "cards"; count: number }
@@ -24,217 +32,145 @@ export interface CosmeticItem {
   requirement: CosmeticRequirement;
 }
 
-export const DEFAULT_AVATAR: AvatarConfig = {
-  gender: "male",
-  hat: "hat-cap-red",
-  glasses: "glasses-none",
-  top: "top-explorer",
-  bottom: "bottom-jeans",
-};
-
 export const COSMETICS_CATALOG: CosmeticItem[] = [
-  // ================= CAPPELLI (hat) =================
+  // --- CAPPELLI ---
   {
     id: "hat-none",
     slot: "hat",
-    name: "Testa Scoperta",
-    description: "Nessun copricapo, capelli al vento.",
-    previewColor: "#64748b",
+    name: "Capelli Naturali",
+    description: "Nessun copricapo, stile libero.",
+    previewColor: "#6b4423",
     requirement: { type: "default" },
   },
   {
     id: "hat-cap-red",
     slot: "hat",
-    name: "Cappellino Retro",
-    description: "Il classico berretto da esploratore 8-bit.",
-    previewColor: "#ff4d6d",
+    name: "Berretto Lilibeo",
+    description: "Il classico berretto rosso da esploratore 8-bit.",
+    previewColor: "#ef4444",
     requirement: { type: "default" },
   },
   {
-    id: "hat-paglia",
+    id: "hat-straw",
     slot: "hat",
-    name: "Paglia del Salinaro",
-    description: "Cappello a tesa larga per il sole delle saline.",
-    previewColor: "#eab308",
-    requirement: { type: "cards", count: 5 },
+    name: "Cappello di Paglia",
+    description: "Perfetto per camminare sotto il sole delle Saline.",
+    previewColor: "#facc15",
+    requirement: { type: "cards", count: 3 },
   },
   {
-    id: "hat-garibaldi",
+    id: "hat-beret-red",
     slot: "hat",
-    name: "Kepi dei Mille",
-    description: "Storico berretto garibaldino dello sbarco 1860.",
+    name: "Berretto Garibaldino",
+    description: "Storico copricapo dei Mille sbarcati nel 1860.",
     previewColor: "#dc2626",
     requirement: {
       type: "easter_egg",
       eggId: "sbarco-1860",
-      eggTitle: "Camicia Rossa 8-Bit",
+      eggTitle: "11 Maggio 1860",
     },
   },
   {
-    id: "hat-woodhouse",
+    id: "hat-crown-gold",
     slot: "hat",
-    name: "Cilindro di Woodhouse",
-    description: "Eleganza inglese del 1773 tra le botti di Marsala.",
-    previewColor: "#1e293b",
-    requirement: {
-      type: "easter_egg",
-      eggId: "woodhouse-1773",
-      eggTitle: "Segreto di Woodhouse",
-    },
-  },
-  {
-    id: "hat-sibilla",
-    slot: "hat",
-    name: "Alloro della Sibilla",
-    description: "Corona profetica di Capo Boeo.",
-    previewColor: "#22c55e",
-    requirement: {
-      type: "easter_egg",
-      eggId: "oracolo-sibilla",
-      eggTitle: "Voce della Sibilla",
-    },
-  },
-  {
-    id: "hat-punico",
-    slot: "hat",
-    name: "Elmo Cartaginese",
-    description: "Elmo con cresta rossa dei marinai della Nave Punica.",
-    previewColor: "#d97706",
-    requirement: {
-      type: "easter_egg",
-      eggId: "nave-punica",
-      eggTitle: "Rotta di Cartagine",
-    },
-  },
-  {
-    id: "hat-corona-lilibeo",
-    slot: "hat",
-    name: "Corona Turrita d’Oro",
-    description: "Emblema supremo per chi ha completato tutta Marsala.",
+    name: "Corona di Lilibeo ★",
+    description: "Corona d’oro riservata alle leggende Prestigio.",
     previewColor: "#ffd166",
-    requirement: { type: "cards", count: 20 },
+    requirement: { type: "prestige", level: 1 },
   },
 
-  // ================= OCCHIALI (glasses) =================
+  // --- OCCHIALI ---
   {
     id: "glasses-none",
     slot: "glasses",
     name: "Nessun Occhiale",
-    description: "Sguardo libero su Lilibeo.",
-    previewColor: "#64748b",
+    description: "Sguardo limpido sul Mediterraneo.",
+    previewColor: "#94a3b8",
     requirement: { type: "default" },
   },
   {
     id: "glasses-pixel",
     slot: "glasses",
-    name: "Occhiali 8-Bit",
-    description: "Montatura nera pixelata stile arcade.",
-    previewColor: "#0f172a",
-    requirement: { type: "cards", count: 1 },
-  },
-  {
-    id: "glasses-gameboy",
-    slot: "glasses",
-    name: "Visore Game Boy ’89",
-    description: "Lenti verde fosforo da vero retrogamer.",
-    previewColor: "#84cc16",
-    requirement: {
-      type: "easter_egg",
-      eggId: "konami-gameboy",
-      eggTitle: "Nostalgico 1989",
-    },
+    name: "Occhiali Pixel 8-Bit",
+    description: "Montatura nera squadrata ad alto contrasto.",
+    previewColor: "#1e293b",
+    requirement: { type: "cards", count: 2 },
   },
   {
     id: "glasses-sunset",
     slot: "glasses",
-    name: "Lenti Rosa Stagnone",
-    description: "Riflettono i tramonti infuocati sulle saline.",
-    previewColor: "#fb7185",
+    name: "Lenti Tramonto Stagnone",
+    description: "Riflesso ambrato dei mulini al calar del sole.",
+    previewColor: "#f97316",
     requirement: {
       type: "easter_egg",
       eggId: "tramonto-stagnone",
-      eggTitle: "Cacciatore di Tramonti",
+      eggTitle: "Tramonto allo Stagnone",
     },
   },
   {
     id: "glasses-neon",
     slot: "glasses",
-    name: "Visore Neon Arcade",
-    description: "Lenti ciano fosforescenti per la notte di Lilibeo.",
-    previewColor: "#22d3ee",
+    name: "Visore Notte Neon",
+    description: "Lenti ciano luminose per le esplorazioni notturne.",
+    previewColor: "#38bdf8",
     requirement: {
       type: "easter_egg",
       eggId: "notte-lilibeo",
       eggTitle: "Notte di Lilibeo",
     },
   },
-  {
-    id: "glasses-holo",
-    slot: "glasses",
-    name: "Visore Olografico ★1",
-    description: "Lenti prismatiche riservate ai veterani del New Game+.",
-    previewColor: "#e879f9",
-    requirement: { type: "prestige", level: 1 },
-  },
 
-  // ================= MAGLIE (top) =================
+  // --- MAGLIE ---
   {
     id: "top-explorer",
     slot: "top",
-    name: "Maglia Azzurra",
-    description: "Divisa base dell’esploratore marsalese.",
-    previewColor: "#4cc9f0",
-    requirement: { type: "default" },
-  },
-  {
-    id: "top-sole",
-    slot: "top",
-    name: "T-Shirt Giallo Sole",
-    description: "Perfetta per passeggiare sul Lungomare Boeo.",
-    previewColor: "#facc15",
+    name: "Giacca Esploratore",
+    description: "Divisa ufficiale per mappare Marsala.",
+    previewColor: "#2563eb",
     requirement: { type: "default" },
   },
   {
     id: "top-garibaldi",
     slot: "top",
     name: "Camicia Rossa 1860",
-    description: "Iconica giubba rossa con fazzoletto al collo.",
-    previewColor: "#ef4444",
+    description: "La leggendaria giubba dei Mille di Garibaldi.",
+    previewColor: "#b91c1c",
     requirement: {
       type: "easter_egg",
       eggId: "sbarco-1860",
-      eggTitle: "Camicia Rossa 8-Bit",
+      eggTitle: "11 Maggio 1860",
     },
   },
   {
-    id: "top-cantiniere",
+    id: "top-winemaker",
     slot: "top",
-    name: "Gilet del Cantiniere",
-    description: "Camicia bianca e gilet bordeaux delle cantine storiche.",
-    previewColor: "#881337",
+    name: "Grembiule Cantiniere",
+    description: "Tenuta storica delle antiche baglie del vino Marsala.",
+    previewColor: "#78350f",
     requirement: {
       type: "easter_egg",
       eggId: "woodhouse-1773",
-      eggTitle: "Segreto di Woodhouse",
+      eggTitle: "Cantina Woodhouse 1773",
     },
   },
   {
-    id: "top-kite",
+    id: "top-kitesurf",
     slot: "top",
-    name: "Muta Maestrale",
-    description: "Muta da kitesurf blu e verde fluo dello Stagnone.",
+    name: "Muta Kitesurf Stagnone",
+    description: "Muta tecnica per cavalcare il Maestrale in laguna.",
     previewColor: "#10b981",
     requirement: {
       type: "easter_egg",
       eggId: "vento-stagnone",
-      eggTitle: "Maestro del Maestrale",
+      eggTitle: "Vento dello Stagnone",
     },
   },
   {
     id: "top-cassaro",
     slot: "top",
-    name: "Tunica del Cassaro",
-    description: "Veste viola e oro del custode del Centro Storico.",
+    name: "Mantello del Cassaro",
+    description: "Abito nobile del centro storico di Marsala.",
     previewColor: "#7c3aed",
     requirement: {
       type: "easter_egg",
@@ -243,133 +179,151 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     },
   },
   {
-    id: "top-oro",
+    id: "top-holo",
     slot: "top",
-    name: "Giacca Oro Tramonto",
-    description: "Riservata agli esploratori veterani di Marsala.",
-    previewColor: "#f59e0b",
-    requirement: { type: "cards", count: 15 },
-  },
-  {
-    id: "top-prestige-cape",
-    slot: "top",
-    name: "Mantello Lilibeo ★1",
-    description:
-      "Manto reale con spallacci d’oro per chi ha completato Marsala.",
-    previewColor: "#c026d3",
+    name: "Armatura Olografica ★",
+    description: "Corazza iridescente per campioni New Game+.",
+    previewColor: "#e879f9",
     requirement: { type: "prestige", level: 1 },
   },
 
-  // ================= PANTALONI (bottom) =================
+  // --- PANTALONI ---
   {
     id: "bottom-jeans",
     slot: "bottom",
     name: "Jeans Classici",
-    description: "Comodi per camminare da Capo Boeo a Birgi.",
+    description: "Comodi per camminare dal porto fino alle saline.",
     previewColor: "#1d4ed8",
-    requirement: { type: "default" },
-  },
-  {
-    id: "bottom-shorts",
-    slot: "bottom",
-    name: "Pantaloncini Mare",
-    description: "Stile estivo da Lido Signorino.",
-    previewColor: "#0ea5e9",
     requirement: { type: "default" },
   },
   {
     id: "bottom-cargo",
     slot: "bottom",
-    name: "Cargo Esploratore",
-    description: "Tasconi pronti per custodire le Card.",
+    name: "Pantaloni Cargo Lilibeo",
+    description: "Multitasche per custodire le Trading Card.",
+    previewColor: "#4d7c0f",
+    requirement: { type: "cards", count: 4 },
+  },
+  {
+    id: "bottom-punic",
+    slot: "bottom",
+    name: "Tunica Punica 397 a.C.",
+    description: "Veste degli antichi navigatori fenici di Mozia.",
+    previewColor: "#0284c7",
+    requirement: {
+      type: "easter_egg",
+      eggId: "nave-punica",
+      eggTitle: "Nave Punica 397 a.C.",
+    },
+  },
+  {
+    id: "bottom-sibilla",
+    slot: "bottom",
+    name: "Veste della Sibilla",
+    description: "Stoffa mistica dell’antro di Capo Boeo.",
+    previewColor: "#9333ea",
+    requirement: {
+      type: "easter_egg",
+      eggId: "oracolo-sibilla",
+      eggTitle: "Oracolo della Sibilla",
+    },
+  },
+  {
+    id: "bottom-gameboy",
+    slot: "bottom",
+    name: "Pantaloni DMG-01",
+    description: "Colorazione verde fosforo anni ’89.",
     previewColor: "#65a30d",
-    requirement: { type: "cards", count: 3 },
-  },
-  {
-    id: "bottom-garibaldi",
-    slot: "bottom",
-    name: "Pantaloni dei Mille",
-    description: "Grigio-azzurri con banda laterale storica.",
-    previewColor: "#475569",
-    requirement: { type: "cards", count: 8 },
-  },
-  {
-    id: "bottom-punico",
-    slot: "bottom",
-    name: "Calzari Fenici",
-    description: "Tunica corta e sandali degli antichi navigatori.",
-    previewColor: "#b45309",
-    requirement: { type: "cards", count: 12 },
-  },
-  {
-    id: "bottom-oro",
-    slot: "bottom",
-    name: "Gambali d’Oro Lilibeo",
-    description: "Armatura leggendaria del completamento 100%.",
-    previewColor: "#ffd166",
-    requirement: { type: "cards", count: 20 },
+    requirement: {
+      type: "easter_egg",
+      eggId: "konami-gameboy",
+      eggTitle: "Modalità Game Boy",
+    },
   },
 ];
+
+export interface SuperuserOverrides {
+  unlockedCosmetics: string[];
+  lockedCosmetics: string[];
+  unlockedTitles: string[];
+  lockedTitles: string[];
+}
+
+export const DEFAULT_SUPERUSER_OVERRIDES: SuperuserOverrides = {
+  unlockedCosmetics: [],
+  lockedCosmetics: [],
+  unlockedTitles: [],
+  lockedTitles: [],
+};
+
+export function sanitizeAvatarConfig(raw: unknown): AvatarConfig {
+  if (!raw || typeof raw !== "object") {
+    return { ...DEFAULT_AVATAR };
+  }
+  const obj = raw as Record<string, unknown>;
+  const validBySlot = (
+    slot: CosmeticSlot,
+    id: unknown,
+    fallback: string,
+  ): string => {
+    if (
+      typeof id === "string" &&
+      COSMETICS_CATALOG.some((item) => item.slot === slot && item.id === id)
+    ) {
+      return id;
+    }
+    return fallback;
+  };
+
+  return {
+    gender: obj.gender === "female" ? "female" : "male",
+    hat: validBySlot("hat", obj.hat, DEFAULT_AVATAR.hat),
+    glasses: validBySlot("glasses", obj.glasses, DEFAULT_AVATAR.glasses),
+    top: validBySlot("top", obj.top, DEFAULT_AVATAR.top),
+    bottom: validBySlot("bottom", obj.bottom, DEFAULT_AVATAR.bottom),
+  };
+}
+
+export function getRequirementLabel(req: CosmeticRequirement): string {
+  if (req.type === "default") return "Disponibile subito";
+  if (req.type === "cards") return `Sblocca ${req.count} Card`;
+  if (req.type === "prestige") return `Attiva Prestigio ★${req.level}`;
+  return `Segreto: ${req.eggTitle}`;
+}
 
 export function isCosmeticUnlocked(
   item: CosmeticItem,
   unlockedCardsCount: number,
   easterEggs: string[],
   prestige = 0,
+  overrides?: SuperuserOverrides,
 ): boolean {
+  if (overrides?.lockedCosmetics.includes(item.id)) return false;
+  if (overrides?.unlockedCosmetics.includes(item.id)) return true;
+
   const effectiveCards = prestige > 0 ? 20 : unlockedCardsCount;
-  if (item.requirement.type === "default") return true;
-  if (item.requirement.type === "cards")
-    return effectiveCards >= item.requirement.count;
-  if (item.requirement.type === "prestige")
-    return prestige >= item.requirement.level;
-  return easterEggs.includes(item.requirement.eggId);
+  const req = item.requirement;
+  if (req.type === "default") return true;
+  if (req.type === "cards") return effectiveCards >= req.count;
+  if (req.type === "prestige") return prestige >= req.level;
+  return easterEggs.includes(req.eggId);
 }
 
 export function getUnlockedCosmeticIds(
   unlockedCardsCount: number,
   easterEggs: string[],
   prestige = 0,
+  overrides?: SuperuserOverrides,
 ): string[] {
   return COSMETICS_CATALOG.filter((item) =>
-    isCosmeticUnlocked(item, unlockedCardsCount, easterEggs, prestige),
+    isCosmeticUnlocked(
+      item,
+      unlockedCardsCount,
+      easterEggs,
+      prestige,
+      overrides,
+    ),
   ).map((item) => item.id);
-}
-
-export function getRequirementLabel(req: CosmeticRequirement): string {
-  if (req.type === "default") return "Disponibile subito";
-  if (req.type === "cards") {
-    return req.count === 1 ? "Sblocca 1 Card" : `Sblocca ${req.count} Card`;
-  }
-  if (req.type === "prestige") {
-    return `Attiva Prestigio ★${req.level}`;
-  }
-  return `Segreto: ${req.eggTitle}`;
-}
-
-export function sanitizeAvatarConfig(raw: unknown): AvatarConfig {
-  const input = (
-    raw && typeof raw === "object" ? raw : {}
-  ) as Partial<AvatarConfig>;
-  const validForSlot = (
-    slot: CosmeticSlot,
-    id: unknown,
-    fallback: string,
-  ): string => {
-    if (typeof id !== "string") return fallback;
-    const exists = COSMETICS_CATALOG.some(
-      (c) => c.slot === slot && c.id === id,
-    );
-    return exists ? id : fallback;
-  };
-
-  return {
-    gender: input.gender === "female" ? "female" : "male",
-    hat: validForSlot("hat", input.hat, DEFAULT_AVATAR.hat),
-    glasses: validForSlot("glasses", input.glasses, DEFAULT_AVATAR.glasses),
-    top: validForSlot("top", input.top, DEFAULT_AVATAR.top),
-    bottom: validForSlot("bottom", input.bottom, DEFAULT_AVATAR.bottom),
-  };
 }
 
 export type TitleRequirement =
@@ -472,8 +426,12 @@ export function isTitleUnlocked(
     prestige: number;
     bountyStreak: number;
     editionsOwned: string[];
+    overrides?: SuperuserOverrides;
   },
 ): boolean {
+  if (ctx.overrides?.lockedTitles.includes(title.id)) return false;
+  if (ctx.overrides?.unlockedTitles.includes(title.id)) return true;
+
   const effectiveCards = ctx.prestige > 0 ? 20 : ctx.unlockedCardsCount;
   const req = title.requirement;
   if (req.type === "default") return true;
@@ -495,4 +453,31 @@ export function getTitleRequirementLabel(req: TitleRequirement): string {
       : "1 Card Notturna (20:00–06:00)";
   }
   return `Segreto: ${req.eggTitle}`;
+}
+
+export function sanitizeSuperuserOverrides(raw: unknown): SuperuserOverrides {
+  if (!raw || typeof raw !== "object") {
+    return { ...DEFAULT_SUPERUSER_OVERRIDES };
+  }
+  const obj = raw as Record<string, unknown>;
+  const validCosmeticIds = new Set(COSMETICS_CATALOG.map((c) => c.id));
+  const validTitleIds = new Set(PLAYER_TITLES.map((t) => t.id));
+
+  const filterStrings = (arr: unknown, allowed: Set<string>): string[] =>
+    Array.isArray(arr)
+      ? Array.from(
+          new Set(
+            arr.filter(
+              (v): v is string => typeof v === "string" && allowed.has(v),
+            ),
+          ),
+        )
+      : [];
+
+  return {
+    unlockedCosmetics: filterStrings(obj.unlockedCosmetics, validCosmeticIds),
+    lockedCosmetics: filterStrings(obj.lockedCosmetics, validCosmeticIds),
+    unlockedTitles: filterStrings(obj.unlockedTitles, validTitleIds),
+    lockedTitles: filterStrings(obj.lockedTitles, validTitleIds),
+  };
 }

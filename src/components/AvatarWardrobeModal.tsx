@@ -3,7 +3,11 @@ import {
   type AvatarConfig,
   COSMETICS_CATALOG,
   type CosmeticSlot,
+  DEFAULT_AVATAR,
+  DEFAULT_SUPERUSER_OVERRIDES,
+  DEFAULT_TITLE_ID,
   PLAYER_TITLES,
+  type SuperuserOverrides,
   getRequirementLabel,
   getTitleById,
   getTitleRequirementLabel,
@@ -17,6 +21,8 @@ interface AvatarWardrobeModalProps {
   avatar: AvatarConfig;
   titleId: string;
   nickname: string;
+  isSuperuser?: boolean;
+  superuserOverrides?: SuperuserOverrides;
   unlockedCardsCount: number;
   easterEggs: string[];
   prestige: number;
@@ -24,6 +30,11 @@ interface AvatarWardrobeModalProps {
   editionsOwned: string[];
   onSave: (nextAvatar: AvatarConfig) => Promise<void>;
   onSaveTitle: (nextTitleId: string) => Promise<void>;
+  onSaveSuperuserOverrides?: (
+    nextOverrides: SuperuserOverrides,
+    nextAvatar: AvatarConfig,
+    nextTitle: string,
+  ) => Promise<void>;
   onClose: () => void;
 }
 
@@ -38,6 +49,8 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
   avatar,
   titleId,
   nickname,
+  isSuperuser = false,
+  superuserOverrides,
   unlockedCardsCount,
   easterEggs,
   prestige,
@@ -45,11 +58,15 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
   editionsOwned,
   onSave,
   onSaveTitle,
+  onSaveSuperuserOverrides,
   onClose,
 }) => {
   const [section, setSection] = useState<"clothes" | "titles">("clothes");
   const [draft, setDraft] = useState<AvatarConfig>(avatar);
   const [draftTitle, setDraftTitle] = useState<string>(titleId);
+  const [overridesDraft, setOverridesDraft] = useState<SuperuserOverrides>(
+    () => superuserOverrides ?? { ...DEFAULT_SUPERUSER_OVERRIDES },
+  );
   const [activeSlot, setActiveSlot] = useState<CosmeticSlot>("hat");
   const [saving, setSaving] = useState(false);
 
@@ -58,13 +75,103 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
     (item) => item.slot === activeSlot,
   );
 
+  const toggleCosmeticOverride = (
+    itemId: string,
+    slot: CosmeticSlot,
+    currentlyUnlocked: boolean,
+  ) => {
+    sound8bit.click();
+    setOverridesDraft((prev) => {
+      if (currentlyUnlocked) {
+        // Blocca indumento e rimuovilo se indossato
+        if (draft[slot] === itemId) {
+          setDraft((d) => ({ ...d, [slot]: DEFAULT_AVATAR[slot] }));
+        }
+        return {
+          ...prev,
+          unlockedCosmetics: prev.unlockedCosmetics.filter(
+            (id) => id !== itemId,
+          ),
+          lockedCosmetics: prev.lockedCosmetics.includes(itemId)
+            ? prev.lockedCosmetics
+            : [...prev.lockedCosmetics, itemId],
+        };
+      } else {
+        // Sblocca indumento
+        return {
+          ...prev,
+          lockedCosmetics: prev.lockedCosmetics.filter((id) => id !== itemId),
+          unlockedCosmetics: prev.unlockedCosmetics.includes(itemId)
+            ? prev.unlockedCosmetics
+            : [...prev.unlockedCosmetics, itemId],
+        };
+      }
+    });
+  };
+
+  const toggleTitleOverride = (tId: string, currentlyUnlocked: boolean) => {
+    sound8bit.click();
+    setOverridesDraft((prev) => {
+      if (currentlyUnlocked) {
+        if (draftTitle === tId) {
+          setDraftTitle(DEFAULT_TITLE_ID);
+        }
+        return {
+          ...prev,
+          unlockedTitles: prev.unlockedTitles.filter((id) => id !== tId),
+          lockedTitles: prev.lockedTitles.includes(tId)
+            ? prev.lockedTitles
+            : [...prev.lockedTitles, tId],
+        };
+      } else {
+        return {
+          ...prev,
+          lockedTitles: prev.lockedTitles.filter((id) => id !== tId),
+          unlockedTitles: prev.unlockedTitles.includes(tId)
+            ? prev.unlockedTitles
+            : [...prev.unlockedTitles, tId],
+        };
+      }
+    });
+  };
+
+  const handleUnlockAllCosmeticsAndTitles = () => {
+    sound8bit.click();
+    setOverridesDraft({
+      unlockedCosmetics: COSMETICS_CATALOG.map((c) => c.id),
+      lockedCosmetics: [],
+      unlockedTitles: PLAYER_TITLES.map((t) => t.id),
+      lockedTitles: [],
+    });
+  };
+
+  const handleLockAllCosmeticsAndTitles = () => {
+    sound8bit.click();
+    setDraft({ ...DEFAULT_AVATAR, gender: draft.gender });
+    setDraftTitle(DEFAULT_TITLE_ID);
+    setOverridesDraft({
+      unlockedCosmetics: [],
+      lockedCosmetics: COSMETICS_CATALOG.filter(
+        (c) => c.requirement.type !== "default",
+      ).map((c) => c.id),
+      unlockedTitles: [],
+      lockedTitles: PLAYER_TITLES.filter(
+        (t) => t.requirement.type !== "default",
+      ).map((t) => t.id),
+    });
+  };
+
   const handleSaveAll = async () => {
     sound8bit.click();
     setSaving(true);
     try {
-      await onSave(draft);
-      if (draftTitle !== titleId) {
-        await onSaveTitle(draftTitle);
+      if (isSuperuser && onSaveSuperuserOverrides) {
+        await onSaveSuperuserOverrides(overridesDraft, draft, draftTitle);
+      } else {
+        await onSave(draft);
+        if (draftTitle !== titleId) {
+          await onSaveTitle(draftTitle);
+        }
       }
       onClose();
     } finally {
@@ -89,7 +196,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
         </div>
 
         {/* Anteprima Avatar + Nickname + Titolo */}
-        <div className="bg-[#090d18] border-[3px] border-[#4cc9f0] p-3 mb-3 flex items-center justify-between gap-3">
+        <div className="bg-[#090d18] border-[3px] border-[#4cc9f0] p-3 mb-2.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-16 h-20 bg-[#141b33] border-2 border-[#ffd166] flex items-center justify-center shrink-0">
               <PixelAvatar avatar={draft} size={52} />
@@ -134,6 +241,26 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Barra controlli rapidi Superuser */}
+        {isSuperuser && (
+          <div className="grid grid-cols-2 gap-1.5 mb-2.5">
+            <button
+              type="button"
+              onClick={handleUnlockAllCosmeticsAndTitles}
+              className="nes-btn py-1.5 bg-[#c026d3] text-white text-[7px]"
+            >
+              ⚡ SBLOCCA TUTTI I LOOK/TITOLI
+            </button>
+            <button
+              type="button"
+              onClick={handleLockAllCosmeticsAndTitles}
+              className="nes-btn py-1.5 bg-[#be123c] text-white text-[7px]"
+            >
+              🔒 BLOCCA EXTRA (ROLLBACK)
+            </button>
+          </div>
+        )}
 
         {/* Selettore Sezione: VESTITI vs TITOLI */}
         <div className="grid grid-cols-2 gap-1.5 mb-3">
@@ -196,26 +323,31 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                   unlockedCardsCount,
                   easterEggs,
                   prestige,
+                  overridesDraft,
                 );
                 const equipped = draft[activeSlot] === item.id;
+                const isDefaultItem = item.requirement.type === "default";
+
                 return (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
-                    disabled={!unlocked}
-                    onClick={() => {
-                      sound8bit.click();
-                      setDraft((d) => ({ ...d, [activeSlot]: item.id }));
-                    }}
-                    className={`w-full text-left border-[3px] p-2.5 flex items-center justify-between gap-2 ${
+                    className={`w-full border-[3px] p-2.5 flex items-center justify-between gap-2 ${
                       equipped
                         ? "border-[#38e54d] bg-[#102a1d]"
                         : unlocked
                           ? "border-[#2e3d6b] bg-[#0d1324]"
-                          : "border-[#1e293b] bg-[#090d18] opacity-60"
+                          : "border-[#1e293b] bg-[#090d18] opacity-75"
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    <button
+                      type="button"
+                      disabled={!unlocked}
+                      onClick={() => {
+                        sound8bit.click();
+                        setDraft((d) => ({ ...d, [activeSlot]: item.id }));
+                      }}
+                      className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
+                    >
                       <span
                         className="w-6 h-6 border-2 border-black shrink-0"
                         style={{ backgroundColor: item.previewColor }}
@@ -230,11 +362,34 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                             : `🔒 ${getRequirementLabel(item.requirement)}`}
                         </p>
                       </div>
+                    </button>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="font-pixel text-[7px] text-[#38e54d]">
+                        {equipped ? "✓ INDOSSO" : unlocked ? "METTI" : "🔒"}
+                      </span>
+
+                      {isSuperuser && !isDefaultItem && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            toggleCosmeticOverride(
+                              item.id,
+                              activeSlot,
+                              unlocked,
+                            )
+                          }
+                          className={`nes-btn px-2 py-1 text-[7px] ${
+                            unlocked
+                              ? "bg-[#be123c] text-white"
+                              : "bg-[#38e54d] text-black"
+                          }`}
+                        >
+                          {unlocked ? "🔒 BLOCCA" : "🔓 SBLOCCA"}
+                        </button>
+                      )}
                     </div>
-                    <span className="font-pixel text-[7px] text-[#38e54d] shrink-0">
-                      {equipped ? "✓ INDOSSO" : unlocked ? "METTI" : "🔒"}
-                    </span>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -248,26 +403,31 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                 prestige,
                 bountyStreak,
                 editionsOwned,
+                overrides: overridesDraft,
               });
               const equipped = draftTitle === t.id;
+              const isDefaultTitle = t.requirement.type === "default";
+
               return (
-                <button
+                <div
                   key={t.id}
-                  type="button"
-                  disabled={!unlocked}
-                  onClick={() => {
-                    sound8bit.click();
-                    setDraftTitle(t.id);
-                  }}
-                  className={`w-full text-left border-[3px] p-2.5 flex items-center justify-between gap-2 ${
+                  className={`w-full border-[3px] p-2.5 flex items-center justify-between gap-2 ${
                     equipped
                       ? "border-[#ffd166] bg-[#2a1f3d]"
                       : unlocked
                         ? "border-[#2e3d6b] bg-[#0d1324]"
-                        : "border-[#1e293b] bg-[#090d18] opacity-60"
+                        : "border-[#1e293b] bg-[#090d18] opacity-75"
                   }`}
                 >
-                  <div className="min-w-0">
+                  <button
+                    type="button"
+                    disabled={!unlocked}
+                    onClick={() => {
+                      sound8bit.click();
+                      setDraftTitle(t.id);
+                    }}
+                    className="min-w-0 flex-1 text-left"
+                  >
                     <p className="font-pixel text-[8px] text-[#ffd166] truncate">
                       {t.icon} {t.label}
                     </p>
@@ -276,11 +436,28 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                         ? t.description
                         : `🔒 ${getTitleRequirementLabel(t.requirement)}`}
                     </p>
+                  </button>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="font-pixel text-[7px] text-[#38e54d]">
+                      {equipped ? "✓ ATTIVO" : unlocked ? "USA" : "🔒"}
+                    </span>
+
+                    {isSuperuser && !isDefaultTitle && (
+                      <button
+                        type="button"
+                        onClick={() => toggleTitleOverride(t.id, unlocked)}
+                        className={`nes-btn px-2 py-1 text-[7px] ${
+                          unlocked
+                            ? "bg-[#be123c] text-white"
+                            : "bg-[#38e54d] text-black"
+                        }`}
+                      >
+                        {unlocked ? "🔒 BLOCCA" : "🔓 SBLOCCA"}
+                      </button>
+                    )}
                   </div>
-                  <span className="font-pixel text-[7px] text-[#38e54d] shrink-0">
-                    {equipped ? "✓ ATTIVO" : unlocked ? "USA" : "🔒"}
-                  </span>
-                </button>
+                </div>
               );
             })}
           </div>

@@ -1,4 +1,8 @@
-import type { AvatarConfig, AvatarGender } from "../../shared/cosmetics";
+import type {
+  AvatarConfig,
+  AvatarGender,
+  SuperuserOverrides,
+} from "../../shared/cosmetics";
 import type {
   DailyBountyInfo,
   LeaderboardEntry,
@@ -73,6 +77,16 @@ export const api = {
       body: JSON.stringify({ titleId }),
     }),
 
+  updateSuperuserOverrides: (payload: {
+    overrides: SuperuserOverrides;
+    avatar?: AvatarConfig;
+    title?: string;
+  }) =>
+    request<{ user: UserProfile }>("/auth/superuser-overrides", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
   getProgress: () =>
     request<{
       user: UserProfile;
@@ -116,12 +130,47 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  unlockAllPois: () =>
+    request<{
+      user: UserProfile;
+      unlocks: Record<string, UnlockData>;
+      easterEggs: string[];
+      dailyBounty: DailyBountyInfo;
+      totalXp: number;
+    }>("/progress/unlock-all", {
+      method: "POST",
+    }),
+
+  lockPoi: (payload: { poiId?: string; all?: boolean }) =>
+    request<{
+      user: UserProfile;
+      unlocks: Record<string, UnlockData>;
+      easterEggs: string[];
+      dailyBounty: DailyBountyInfo;
+      totalXp: number;
+    }>("/progress/lock", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   claimEasterEgg: (eggId: string) =>
     request<{ isNew: boolean; easterEggs: string[]; totalXp: number }>(
       "/progress/easter-egg",
       {
         method: "POST",
         body: JSON.stringify({ eggId }),
+      },
+    ),
+
+  adminEasterEgg: (payload: {
+    action: "unlock" | "lock" | "unlock_all" | "lock_all";
+    eggId?: string;
+  }) =>
+    request<{ easterEggs: string[]; totalXp: number }>(
+      "/progress/easter-egg/admin",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
       },
     ),
 

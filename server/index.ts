@@ -8,7 +8,10 @@ import {
   activateUserPrestige,
   addEasterEgg,
   claimDailyBountyReward,
+  clearAllEasterEggs,
   createUser,
+  deleteAllUnlocks,
+  deleteUnlock,
   ensureSuperuser,
   findUserById,
   findUserByUsername,
@@ -17,6 +20,9 @@ import {
   getUserUnlocks,
   initDb,
   isNicknameTaken,
+  removeEasterEgg,
+  setAllEasterEggs,
+  updateSuperuserOverrides,
   updateUserAvatar,
   updateUserNickname,
   updateUserTitle,
@@ -35,10 +41,12 @@ import {
 } from "../shared/pois.js";
 import {
   DEFAULT_AVATAR,
+  DEFAULT_TITLE_ID,
   getTitleById,
   getUnlockedCosmeticIds,
   isTitleUnlocked,
   sanitizeAvatarConfig,
+  sanitizeSuperuserOverrides,
   sanitizeTitleId,
 } from "../shared/cosmetics.js";
 
@@ -139,6 +147,7 @@ function serializeUser(u: UserRecord) {
     bountyStreak: u.bountyStreak,
     lastBountyDate: u.lastBountyDate,
     isSuperuser: u.isSuperuser,
+    superuserOverrides: u.superuserOverrides,
   };
 }
 
@@ -155,6 +164,29 @@ function buildDailyBounty(u: UserRecord) {
     completedToday,
     bonusXp: nextStreakIfClaimed >= 3 ? 150 : 100,
   };
+}
+
+function buildSvgFallbackCard(
+  poi: (typeof MARSALA_POIS)[number],
+  nickname: string,
+  isHolo: boolean,
+): string {
+  const border = isHolo ? "#e879f9" : "#ffd166";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="540" height="780" viewBox="0 0 540 780">
+    <rect width="540" height="780" fill="#0b0e1a"/>
+    <rect x="8" y="8" width="524" height="764" fill="none" stroke="${border}" stroke-width="14"/>
+    <rect x="22" y="22" width="496" height="736" fill="none" stroke="#4cc9f0" stroke-width="4"/>
+    <text x="36" y="56" fill="${border}" font-family="monospace" font-size="18" font-weight="bold">MARSALA-DEX CARD</text>
+    <rect x="36" y="74" width="468" height="340" fill="#1e1b4b" stroke="#f4f1de" stroke-width="4"/>
+    <circle cx="420" cy="150" r="32" fill="#ffd166"/>
+    <text x="270" y="265" text-anchor="middle" font-size="92">${poi.icon}</text>
+    <text x="36" y="458" fill="#ffd166" font-family="monospace" font-size="22" font-weight="bold">${poi.name.slice(0, 28)}</text>
+    <text x="36" y="486" fill="#4cc9f0" font-family="monospace" font-size="17">${poi.zone.slice(0, 38)}</text>
+    <text x="36" y="530" fill="#f4f1de" font-family="monospace" font-size="14">${poi.shortDesc.slice(0, 52)}</text>
+    <text x="36" y="680" fill="#e2e8f0" font-family="monospace" font-size="16">PLAYER: ${nickname}</text>
+    <text x="36" y="710" fill="#94a3b8" font-family="monospace" font-size="15">GPS: ${poi.lat.toFixed(5)}, ${poi.lng.toFixed(5)}</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 app.get("/api/health", (_req: Request, res: Response) => {
@@ -320,33 +352,32 @@ app.patch(
       }
 
       const candidate = sanitizeAvatarConfig(req.body);
-      if (!user.isSuperuser) {
-        const [unlocks, easterEggs] = await Promise.all([
-          getUserUnlocks(req.userId!),
-          getUserEasterEggs(req.userId!),
-        ]);
+      const [unlocks, easterEggs] = await Promise.all([
+        getUserUnlocks(req.userId!),
+        getUserEasterEggs(req.userId!),
+      ]);
 
-        const unlockedSet = new Set(
-          getUnlockedCosmeticIds(
-            Object.keys(unlocks).length,
-            easterEggs,
-            user.prestige,
-          ),
-        );
+      const unlockedSet = new Set(
+        getUnlockedCosmeticIds(
+          Object.keys(unlocks).length,
+          easterEggs,
+          user.prestige,
+          user.superuserOverrides,
+        ),
+      );
 
-        const chosen = [
-          candidate.hat,
-          candidate.glasses,
-          candidate.top,
-          candidate.bottom,
-        ];
-        if (!chosen.every((id) => unlockedSet.has(id))) {
-          res.status(403).json({
-            error:
-              "Uno o più indumenti selezionati non sono ancora stati sbloccati!",
-          });
-          return;
-        }
+      const chosen = [
+        candidate.hat,
+        candidate.glasses,
+        candidate.top,
+        candidate.bottom,
+      ];
+      if (!chosen.every((id) => unlockedSet.has(id))) {
+        res.status(403).json({
+          error:
+            "Uno o più indumenti selezionati non sono ancora stati sbloccati!",
+        });
+        return;
       }
 
       await updateUserAvatar(req.userId!, candidate);
@@ -377,27 +408,26 @@ app.patch(
       );
       const titleDef = getTitleById(titleId);
 
-      if (!user.isSuperuser) {
-        const [unlocks, easterEggs] = await Promise.all([
-          getUserUnlocks(user.id),
-          getUserEasterEggs(user.id),
-        ]);
+      const [unlocks, easterEggs] = await Promise.all([
+        getUserUnlocks(user.id),
+        getUserEasterEggs(user.id),
+      ]);
 
-        const editionsOwned = Object.values(unlocks).map((u) => u.edition);
-        const allowed = isTitleUnlocked(titleDef, {
-          unlockedCardsCount: Object.keys(unlocks).length,
-          easterEggs,
-          prestige: user.prestige,
-          bountyStreak: user.bountyStreak,
-          editionsOwned,
-        });
+      const editionsOwned = Object.values(unlocks).map((u) => u.edition);
+      const allowed = isTitleUnlocked(titleDef, {
+        unlockedCardsCount: Object.keys(unlocks).length,
+        easterEggs,
+        prestige: user.prestige,
+        bountyStreak: user.bountyStreak,
+        editionsOwned,
+        overrides: user.superuserOverrides,
+      });
 
-        if (!allowed) {
-          res
-            .status(403)
-            .json({ error: "Non hai ancora sbloccato questo titolo!" });
-          return;
-        }
+      if (!allowed) {
+        res
+          .status(403)
+          .json({ error: "Non hai ancora sbloccato questo titolo!" });
+        return;
       }
 
       await updateUserTitle(user.id, titleDef.id);
@@ -405,6 +435,50 @@ app.patch(
     } catch (err) {
       console.error("[UPDATE TITLE ERROR]", err);
       res.status(500).json({ error: "Errore aggiornamento titolo." });
+    }
+  },
+);
+
+// --- SUPERUSER: SBLOCCA / BLOCCA INDUMENTI E TITOLI ---
+app.patch(
+  "/api/auth/superuser-overrides",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const user = await findUserById(req.userId!);
+      if (!user || !user.isSuperuser) {
+        res
+          .status(403)
+          .json({ error: "Solo il Superuser può modificare questi permessi." });
+        return;
+      }
+
+      const body = req.body as {
+        overrides?: unknown;
+        avatar?: unknown;
+        title?: unknown;
+      };
+
+      const nextOverrides = sanitizeSuperuserOverrides(body.overrides);
+      await updateSuperuserOverrides(user.id, nextOverrides);
+
+      let nextAvatar = user.avatar;
+      if (body.avatar) {
+        nextAvatar = sanitizeAvatarConfig(body.avatar);
+        await updateUserAvatar(user.id, nextAvatar);
+      }
+
+      let nextTitle = user.title;
+      if (typeof body.title === "string") {
+        nextTitle = sanitizeTitleId(body.title);
+        await updateUserTitle(user.id, nextTitle);
+      }
+
+      const fresh = (await findUserById(user.id))!;
+      res.json({ user: serializeUser(fresh) });
+    } catch (err) {
+      console.error("[SUPERUSER OVERRIDES ERROR]", err);
+      res.status(500).json({ error: "Errore salvataggio override Superuser." });
     }
   },
 );
@@ -478,7 +552,6 @@ app.post(
         return;
       }
 
-      // Per gli utenti standard GPS e foto sono obbligatori; per il Superuser (Fabbro) vengono bypassati
       if (!user.isSuperuser) {
         if (typeof lat !== "number" || typeof lng !== "number") {
           res.status(400).json({ error: "Coordinate GPS reali obbligatorie." });
@@ -509,7 +582,7 @@ app.post(
       const effectivePhoto =
         photoDataUrl && photoDataUrl.startsWith("data:image/")
           ? photoDataUrl
-          : "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+          : buildSvgFallbackCard(poi, user.nickname, user.prestige > 0);
 
       const existingUnlocks = await getUserUnlocks(user.id);
       const prevUnlock = existingUnlocks[poi.id];
@@ -606,6 +679,96 @@ app.post(
   },
 );
 
+// --- SUPERUSER: SBLOCCA TUTTE LE 20 CARD IN UN COLPO SOLO ---
+app.post(
+  "/api/progress/unlock-all",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const user = await findUserById(req.userId!);
+      if (!user || !user.isSuperuser) {
+        res.status(403).json({ error: "Azione riservata al Superuser." });
+        return;
+      }
+
+      const existing = await getUserUnlocks(user.id);
+      const isHolo = user.prestige > 0;
+
+      for (const poi of MARSALA_POIS) {
+        if (existing[poi.id]) continue;
+        const baseXp =
+          user.prestige > 0
+            ? Math.round(poi.xp * (1 + user.prestige * 0.25))
+            : poi.xp;
+        await upsertUnlock(user.id, {
+          poiId: poi.id,
+          photoDataUrl: buildSvgFallbackCard(poi, user.nickname, isHolo),
+          lat: poi.lat,
+          lng: poi.lng,
+          accuracy: 5,
+          xpEarned: baseXp,
+          isHolo,
+          edition: "standard",
+        });
+      }
+
+      const [unlocks, easterEggs] = await Promise.all([
+        getUserUnlocks(user.id),
+        getUserEasterEggs(user.id),
+      ]);
+
+      res.json({
+        user: serializeUser(user),
+        unlocks,
+        easterEggs,
+        dailyBounty: buildDailyBounty(user),
+        totalXp: computeTotalXp(unlocks, easterEggs, user.bonusXp),
+      });
+    } catch (err) {
+      console.error("[UNLOCK ALL ERROR]", err);
+      res.status(500).json({ error: "Errore sblocco massivo POI." });
+    }
+  },
+);
+
+// --- SUPERUSER: ROLLBACK / BLOCCA SINGOLA CARD O TUTTE LE CARD ---
+app.post(
+  "/api/progress/lock",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const user = await findUserById(req.userId!);
+      if (!user || !user.isSuperuser) {
+        res.status(403).json({ error: "Azione riservata al Superuser." });
+        return;
+      }
+
+      const { poiId, all } = req.body as { poiId?: string; all?: boolean };
+      if (all) {
+        await deleteAllUnlocks(user.id);
+      } else if (poiId) {
+        await deleteUnlock(user.id, poiId);
+      }
+
+      const [unlocks, easterEggs] = await Promise.all([
+        getUserUnlocks(user.id),
+        getUserEasterEggs(user.id),
+      ]);
+
+      res.json({
+        user: serializeUser(user),
+        unlocks,
+        easterEggs,
+        dailyBounty: buildDailyBounty(user),
+        totalXp: computeTotalXp(unlocks, easterEggs, user.bonusXp),
+      });
+    } catch (err) {
+      console.error("[LOCK POI ERROR]", err);
+      res.status(500).json({ error: "Errore rollback Card/territorio." });
+    }
+  },
+);
+
 app.post(
   "/api/progress/easter-egg",
   authMiddleware,
@@ -638,6 +801,52 @@ app.post(
     } catch (err) {
       console.error("[EASTER EGG ERROR]", err);
       res.status(500).json({ error: "Errore salvataggio segreto." });
+    }
+  },
+);
+
+// --- SUPERUSER: SBLOCCA / BLOCCA SINGOLO SEGRETO O TUTTI I SEGRETI ---
+app.post(
+  "/api/progress/easter-egg/admin",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const user = await findUserById(req.userId!);
+      if (!user || !user.isSuperuser) {
+        res.status(403).json({ error: "Azione riservata al Superuser." });
+        return;
+      }
+
+      const { action, eggId } = req.body as {
+        action?: "unlock" | "lock" | "unlock_all" | "lock_all";
+        eggId?: string;
+      };
+
+      if (action === "unlock_all") {
+        await setAllEasterEggs(
+          user.id,
+          EASTER_EGGS.map((e) => e.id),
+        );
+      } else if (action === "lock_all") {
+        await clearAllEasterEggs(user.id);
+      } else if (action === "unlock" && eggId) {
+        await addEasterEgg(user.id, eggId);
+      } else if (action === "lock" && eggId) {
+        await removeEasterEgg(user.id, eggId);
+      }
+
+      const [unlocks, easterEggs] = await Promise.all([
+        getUserUnlocks(user.id),
+        getUserEasterEggs(user.id),
+      ]);
+
+      res.json({
+        easterEggs,
+        totalXp: computeTotalXp(unlocks, easterEggs, user.bonusXp),
+      });
+    } catch (err) {
+      console.error("[ADMIN EASTER EGG ERROR]", err);
+      res.status(500).json({ error: "Errore gestione segreti Superuser." });
     }
   },
 );

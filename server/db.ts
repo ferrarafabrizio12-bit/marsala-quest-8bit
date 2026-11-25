@@ -3,8 +3,11 @@ import { Pool } from "pg";
 import {
   type AvatarConfig,
   DEFAULT_AVATAR,
+  DEFAULT_SUPERUSER_OVERRIDES,
   DEFAULT_TITLE_ID,
+  type SuperuserOverrides,
   sanitizeAvatarConfig,
+  sanitizeSuperuserOverrides,
   sanitizeTitleId,
 } from "../shared/cosmetics.js";
 import type { CardEdition } from "../shared/pois.js";
@@ -21,6 +24,7 @@ export interface UserRecord {
   bountyStreak: number;
   lastBountyDate: string | null;
   isSuperuser: boolean;
+  superuserOverrides: SuperuserOverrides;
   createdAt: string;
 }
 
@@ -66,6 +70,7 @@ export const pool = new Pool({
 });
 
 const DEFAULT_AVATAR_JSON = JSON.stringify(DEFAULT_AVATAR);
+const DEFAULT_OVERRIDES_JSON = JSON.stringify(DEFAULT_SUPERUSER_OVERRIDES);
 
 function sanitizeEdition(raw: unknown): CardEdition {
   if (raw === "golden_hour" || raw === "night") return raw;
@@ -85,6 +90,7 @@ function mapUserRow(r: Record<string, unknown>): UserRecord {
     bountyStreak: Number(r.bounty_streak || 0),
     lastBountyDate: r.last_bounty_date ? String(r.last_bounty_date) : null,
     isSuperuser: Boolean(r.is_superuser),
+    superuserOverrides: sanitizeSuperuserOverrides(r.superuser_overrides),
     createdAt: new Date(String(r.created_at)).toISOString(),
   };
 }
@@ -103,6 +109,7 @@ export async function initDb(): Promise<void> {
       bounty_streak INTEGER NOT NULL DEFAULT 0,
       last_bounty_date TEXT,
       is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
+      superuser_overrides JSONB NOT NULL DEFAULT '${DEFAULT_OVERRIDES_JSON}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
@@ -113,7 +120,8 @@ export async function initDb(): Promise<void> {
       ADD COLUMN IF NOT EXISTS bonus_xp INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS bounty_streak INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS last_bounty_date TEXT,
-      ADD COLUMN IF NOT EXISTS is_superuser BOOLEAN NOT NULL DEFAULT FALSE;
+      ADD COLUMN IF NOT EXISTS is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS superuser_overrides JSONB NOT NULL DEFAULT '${DEFAULT_OVERRIDES_JSON}'::jsonb;
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_nickname_lower
       ON users (LOWER(nickname));
@@ -169,7 +177,7 @@ export async function ensureSuperuser(
   );
 }
 
-const USER_COLUMNS = `id, username, nickname, password_hash, avatar_config, equipped_title, prestige, bonus_xp, bounty_streak, last_bounty_date, is_superuser, created_at`;
+const USER_COLUMNS = `id, username, nickname, password_hash, avatar_config, equipped_title, prestige, bonus_xp, bounty_streak, last_bounty_date, is_superuser, superuser_overrides, created_at`;
 
 export async function findUserByUsername(
   username: string,
@@ -258,6 +266,16 @@ export async function updateUserTitle(
   ]);
 }
 
+export async function updateSuperuserOverrides(
+  userId: string,
+  overrides: SuperuserOverrides,
+): Promise<void> {
+  await pool.query(
+    `UPDATE users SET superuser_overrides = $1::jsonb WHERE id = $2`,
+    [JSON.stringify(overrides), userId],
+  );
+}
+
 export async function getUserUnlocks(
   userId: string,
 ): Promise<Record<string, UnlockRecord>> {
@@ -336,6 +354,20 @@ export async function upsertUnlock(
     edition: sanitizeEdition(r.edition),
     unlockedAt: new Date(r.unlocked_at).toISOString(),
   };
+}
+
+export async function deleteUnlock(
+  userId: string,
+  poiId: string,
+): Promise<void> {
+  await pool.query(`DELETE FROM unlocks WHERE user_id = $1 AND poi_id = $2`, [
+    userId,
+    poiId,
+  ]);
+}
+
+export async function deleteAllUnlocks(userId: string): Promise<void> {
+  await pool.query(`DELETE FROM unlocks WHERE user_id = $1`, [userId]);
 }
 
 export async function claimDailyBountyReward(
@@ -427,6 +459,30 @@ export async function addEasterEgg(
     [userId, eggId],
   );
   return (rowCount ?? 0) > 0;
+}
+
+export async function removeEasterEgg(
+  userId: string,
+  eggId: string,
+): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `DELETE FROM easter_eggs WHERE user_id = $1 AND egg_id = $2`,
+    [userId, eggId],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+export async function setAllEasterEggs(
+  userId: string,
+  eggIds: string[],
+): Promise<void> {
+  for (const eggId of eggIds) {
+    await addEasterEgg(userId, eggId);
+  }
+}
+
+export async function clearAllEasterEggs(userId: string): Promise<void> {
+  await pool.query(`DELETE FROM easter_eggs WHERE user_id = $1`, [userId]);
 }
 
 export async function getLeaderboardRows(): Promise<LeaderboardRow[]> {

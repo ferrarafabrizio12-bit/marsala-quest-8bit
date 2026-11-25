@@ -342,6 +342,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
 );
 
 interface DexModalProps {
+  isSuperuser?: boolean;
   unlocks: Record<string, UnlockData>;
   easterEggs: string[];
   dailyBounty: DailyBountyInfo | null;
@@ -352,6 +353,14 @@ interface DexModalProps {
   onToggleSortByNearest: () => void;
   onToggleOnlyMissing: () => void;
   onSelectPoi: (poi: PoiDefinition) => void;
+  onQuickUnlockPoi?: (poi: PoiDefinition) => Promise<void>;
+  onLockPoi?: (poiId: string) => Promise<void>;
+  onUnlockAllPois?: () => Promise<void>;
+  onLockAllPois?: () => Promise<void>;
+  onAdminEasterEgg?: (
+    action: "unlock" | "lock" | "unlock_all" | "lock_all",
+    eggId?: string,
+  ) => Promise<void>;
   onOpenPostcard: () => void;
   onTrigger1860: () => void;
   onTriggerPunic: () => void;
@@ -359,6 +368,7 @@ interface DexModalProps {
 }
 
 export const DexModal: React.FC<DexModalProps> = ({
+  isSuperuser = false,
   unlocks,
   easterEggs,
   dailyBounty,
@@ -369,6 +379,11 @@ export const DexModal: React.FC<DexModalProps> = ({
   onToggleSortByNearest,
   onToggleOnlyMissing,
   onSelectPoi,
+  onQuickUnlockPoi,
+  onLockPoi,
+  onUnlockAllPois,
+  onLockAllPois,
+  onAdminEasterEgg,
   onOpenPostcard,
   onTrigger1860,
   onTriggerPunic,
@@ -376,6 +391,7 @@ export const DexModal: React.FC<DexModalProps> = ({
 }) => {
   const [tab, setTab] = useState<"pois" | "eggs">("pois");
   const [query, setQuery] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const bountyPoi = dailyBounty
     ? MARSALA_POIS.find((p) => p.id === dailyBounty.poiId)
@@ -472,6 +488,50 @@ export const DexModal: React.FC<DexModalProps> = ({
 
         {tab === "pois" ? (
           <>
+            {/* Barra Superuser massiva per Card e Territori */}
+            {isSuperuser && (
+              <div className="grid grid-cols-2 gap-1.5 mb-2">
+                <button
+                  type="button"
+                  disabled={busyId !== null}
+                  onClick={async () => {
+                    if (!onUnlockAllPois) return;
+                    sound8bit.click();
+                    setBusyId("all-pois");
+                    try {
+                      await onUnlockAllPois();
+                    } finally {
+                      setBusyId(null);
+                    }
+                  }}
+                  className="nes-btn py-1.5 bg-[#c026d3] text-white text-[7px] disabled:opacity-50"
+                >
+                  {busyId === "all-pois"
+                    ? "SBLOCCO..."
+                    : "⚡ SBLOCCA TUTTE (20/20)"}
+                </button>
+                <button
+                  type="button"
+                  disabled={busyId !== null}
+                  onClick={async () => {
+                    if (!onLockAllPois) return;
+                    sound8bit.click();
+                    setBusyId("lock-all-pois");
+                    try {
+                      await onLockAllPois();
+                    } finally {
+                      setBusyId(null);
+                    }
+                  }}
+                  className="nes-btn py-1.5 bg-[#be123c] text-white text-[7px] disabled:opacity-50"
+                >
+                  {busyId === "lock-all-pois"
+                    ? "ROLLBACK..."
+                    : "🔒 BLOCCA TUTTE (0/20)"}
+                </button>
+              </div>
+            )}
+
             {/* Box Obiettivo del Giorno */}
             {dailyBounty && bountyPoi && (
               <button
@@ -544,14 +604,9 @@ export const DexModal: React.FC<DexModalProps> = ({
                 const u = unlocks[poi.id];
                 const isBounty = dailyBounty?.poiId === poi.id;
                 return (
-                  <button
+                  <div
                     key={poi.id}
-                    onClick={() => {
-                      sound8bit.click();
-                      onClose();
-                      onSelectPoi(poi);
-                    }}
-                    className={`text-left border-[3px] p-2.5 active:scale-[0.99] transition ${
+                    className={`border-[3px] p-2.5 flex flex-col justify-between ${
                       u?.isHolo
                         ? "holo-card bg-[#25173d]"
                         : u
@@ -561,81 +616,213 @@ export const DexModal: React.FC<DexModalProps> = ({
                             : "border-[#2e3d6b] bg-[#0d1324] opacity-90"
                     }`}
                   >
-                    <div className="flex justify-between items-center gap-1">
-                      <span className="font-pixel text-[8px] text-[#ffd166] leading-snug">
-                        {isBounty ? "🎯 " : ""}
-                        {poi.icon} {poi.name}
-                      </span>
-                      <span className="text-base text-[#38e54d] whitespace-nowrap">
-                        +{u ? u.xpEarned : poi.xp}XP
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-1">
-                      <p className="text-base text-[#94a3b8] truncate">
-                        {poi.zone}
-                        {distance !== null ? ` • ${distance}m` : ""}
-                      </p>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {u?.edition === "golden_hour" && (
-                          <span className="font-pixel text-[7px] text-[#fbbf24]">
-                            🌅
-                          </span>
-                        )}
-                        {u?.edition === "night" && (
-                          <span className="font-pixel text-[7px] text-[#38bdf8]">
-                            🌙
-                          </span>
-                        )}
-                        {u?.isHolo && (
-                          <span className="font-pixel text-[7px] text-[#f0abfc]">
-                            ✦ HOLO
-                          </span>
-                        )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sound8bit.click();
+                        onClose();
+                        onSelectPoi(poi);
+                      }}
+                      className="text-left w-full active:scale-[0.99] transition"
+                    >
+                      <div className="flex justify-between items-center gap-1">
+                        <span className="font-pixel text-[8px] text-[#ffd166] leading-snug">
+                          {isBounty ? "🎯 " : ""}
+                          {poi.icon} {poi.name}
+                        </span>
+                        <span className="text-base text-[#38e54d] whitespace-nowrap">
+                          +{u ? u.xpEarned : poi.xp}XP
+                        </span>
                       </div>
-                    </div>
-                    {u ? (
-                      <img
-                        src={u.photoDataUrl}
-                        alt={poi.name}
-                        className="mt-2 w-full h-40 object-contain bg-[#0b0e1a] border-2 border-[#ffd166]"
-                      />
-                    ) : (
-                      <div className="mt-2 h-12 bg-black/50 border-2 border-dashed border-[#334155] flex items-center justify-center text-[#94a3b8] text-lg">
-                        ? Tocca per bussola e foto
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="text-base text-[#94a3b8] truncate">
+                          {poi.zone}
+                          {distance !== null ? ` • ${distance}m` : ""}
+                        </p>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {u?.edition === "golden_hour" && (
+                            <span className="font-pixel text-[7px] text-[#fbbf24]">
+                              🌅
+                            </span>
+                          )}
+                          {u?.edition === "night" && (
+                            <span className="font-pixel text-[7px] text-[#38bdf8]">
+                              🌙
+                            </span>
+                          )}
+                          {u?.isHolo && (
+                            <span className="font-pixel text-[7px] text-[#f0abfc]">
+                              ✦ HOLO
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {u ? (
+                        <img
+                          src={u.photoDataUrl}
+                          alt={poi.name}
+                          className="mt-2 w-full h-40 object-contain bg-[#0b0e1a] border-2 border-[#ffd166]"
+                        />
+                      ) : (
+                        <div className="mt-2 h-12 bg-black/50 border-2 border-dashed border-[#334155] flex items-center justify-center text-[#94a3b8] text-lg">
+                          ? Tocca per bussola e foto
+                        </div>
+                      )}
+                    </button>
+
+                    {/* Controllo Superuser rapido sulla singola Card */}
+                    {isSuperuser && (
+                      <div className="mt-2 pt-2 border-t border-white/10">
+                        {u ? (
+                          <button
+                            type="button"
+                            disabled={busyId === poi.id}
+                            onClick={async () => {
+                              if (!onLockPoi) return;
+                              sound8bit.click();
+                              setBusyId(poi.id);
+                              try {
+                                await onLockPoi(poi.id);
+                              } finally {
+                                setBusyId(null);
+                              }
+                            }}
+                            className="nes-btn w-full py-1.5 bg-[#be123c] text-white text-[7px]"
+                          >
+                            {busyId === poi.id
+                              ? "ROLLBACK..."
+                              : "🔒 BLOCCA CARD & TERRITORIO"}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={busyId === poi.id}
+                            onClick={async () => {
+                              if (!onQuickUnlockPoi) return;
+                              sound8bit.click();
+                              setBusyId(poi.id);
+                              try {
+                                await onQuickUnlockPoi(poi);
+                              } finally {
+                                setBusyId(null);
+                              }
+                            }}
+                            className="nes-btn w-full py-1.5 bg-[#38e54d] text-black text-[7px]"
+                          >
+                            {busyId === poi.id
+                              ? "SBLOCCO..."
+                              : "⚡ SBLOCCA SUBITO"}
+                          </button>
+                        )}
                       </div>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
           </>
         ) : (
-          <div className="overflow-y-auto space-y-2.5 pr-1">
-            {EASTER_EGGS.map((egg) => {
-              const found = easterEggs.includes(egg.id);
-              return (
-                <div
-                  key={egg.id}
-                  className={`border-[3px] p-3 ${
-                    found
-                      ? "border-[#38e54d] bg-[#102a1d]"
-                      : "border-[#2e3d6b] bg-[#0d1324]"
-                  }`}
+          <div className="flex flex-col flex-1 min-h-0">
+            {/* Barra Superuser massiva per tutti i Segreti */}
+            {isSuperuser && onAdminEasterEgg && (
+              <div className="grid grid-cols-2 gap-1.5 mb-2.5 shrink-0">
+                <button
+                  type="button"
+                  disabled={busyId !== null}
+                  onClick={async () => {
+                    sound8bit.click();
+                    setBusyId("all-eggs");
+                    try {
+                      await onAdminEasterEgg("unlock_all");
+                    } finally {
+                      setBusyId(null);
+                    }
+                  }}
+                  className="nes-btn py-2 bg-[#c026d3] text-white text-[7px] sm:text-[8px]"
                 >
-                  <div className="flex justify-between items-center">
-                    <span className="font-pixel text-[9px] text-[#ffd166]">
-                      {found
-                        ? `${egg.badge} ${egg.title}`
-                        : "??? SEGRETO BLOCCATO"}
-                    </span>
-                    <span className="text-lg text-[#38e54d]">+{egg.xp} XP</span>
+                  {busyId === "all-eggs"
+                    ? "SBLOCCO..."
+                    : "⚡ SBLOCCA TUTTI I SEGRETI"}
+                </button>
+                <button
+                  type="button"
+                  disabled={busyId !== null}
+                  onClick={async () => {
+                    sound8bit.click();
+                    setBusyId("lock-all-eggs");
+                    try {
+                      await onAdminEasterEgg("lock_all");
+                    } finally {
+                      setBusyId(null);
+                    }
+                  }}
+                  className="nes-btn py-2 bg-[#be123c] text-white text-[7px] sm:text-[8px]"
+                >
+                  {busyId === "lock-all-eggs"
+                    ? "ROLLBACK..."
+                    : "🔒 BLOCCA TUTTI I SEGRETI"}
+                </button>
+              </div>
+            )}
+
+            <div className="overflow-y-auto space-y-2.5 pr-1 flex-1">
+              {EASTER_EGGS.map((egg) => {
+                const found = easterEggs.includes(egg.id);
+                return (
+                  <div
+                    key={egg.id}
+                    className={`border-[3px] p-3 ${
+                      found
+                        ? "border-[#38e54d] bg-[#102a1d]"
+                        : "border-[#2e3d6b] bg-[#0d1324]"
+                    }`}
+                  >
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="font-pixel text-[9px] text-[#ffd166]">
+                        {found || isSuperuser
+                          ? `${egg.badge} ${egg.title}`
+                          : "??? SEGRETO BLOCCATO"}
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-lg text-[#38e54d]">
+                          +{egg.xp} XP
+                        </span>
+                        {isSuperuser && onAdminEasterEgg && (
+                          <button
+                            type="button"
+                            disabled={busyId === egg.id}
+                            onClick={async () => {
+                              sound8bit.click();
+                              setBusyId(egg.id);
+                              try {
+                                await onAdminEasterEgg(
+                                  found ? "lock" : "unlock",
+                                  egg.id,
+                                );
+                              } finally {
+                                setBusyId(null);
+                              }
+                            }}
+                            className={`nes-btn px-2 py-1 text-[7px] ${
+                              found
+                                ? "bg-[#be123c] text-white"
+                                : "bg-[#38e54d] text-black"
+                            }`}
+                          >
+                            {found ? "🔒 BLOCCA" : "🔓 SBLOCCA"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-xl text-[#f4f1de] mt-1 leading-tight">
+                      {found || isSuperuser
+                        ? egg.description
+                        : `Indizio: ${egg.hint}`}
+                    </p>
                   </div>
-                  <p className="text-xl text-[#f4f1de] mt-1 leading-tight">
-                    {found ? egg.description : `Indizio: ${egg.hint}`}
-                  </p>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

@@ -9,6 +9,7 @@ import {
 import {
   type AvatarConfig,
   COSMETICS_CATALOG,
+  type SuperuserOverrides,
   getTitleById,
 } from "../shared/cosmetics";
 import { api, getStoredToken, setStoredToken } from "./services/api";
@@ -161,7 +162,6 @@ export default function App() {
     else setBooting(false);
   }, [loadProgress]);
 
-  // Calcola il percorso pedonale lungo le strade verso il POI puntato da Guidami
   useEffect(() => {
     if (!navTargetPoi || gps.lat === null || gps.lng === null) {
       setWalkingRoute(null);
@@ -325,6 +325,20 @@ export default function App() {
     showToast(`🏷️ Titolo equipaggiato: ${titleObj.icon} ${titleObj.label}`);
   };
 
+  const handleSaveSuperuserOverrides = async (
+    nextOverrides: SuperuserOverrides,
+    nextAvatar: AvatarConfig,
+    nextTitle: string,
+  ) => {
+    const res = await api.updateSuperuserOverrides({
+      overrides: nextOverrides,
+      avatar: nextAvatar,
+      title: nextTitle,
+    });
+    setUser(res.user);
+    showToast("⚡ Look, titoli e permessi Superuser aggiornati!");
+  };
+
   const handleConfirmPrestige = async () => {
     setActivatingPrestige(true);
     try {
@@ -446,6 +460,84 @@ export default function App() {
         sound8bit.victoryMedal();
         setShowMedal(true);
       }, 2200);
+    }
+  };
+
+  // --- FUNZIONI SUPERUSER PER DEX & ROLLBACK ---
+  const handleQuickUnlockPoi = async (poi: PoiDefinition) => {
+    if (!user) return;
+    const res = await api.unlockPoi({
+      poiId: poi.id,
+      lat: gps.lat,
+      lng: gps.lng,
+      accuracy: gps.accuracy || 0,
+      photoDataUrl: "",
+      requestedEdition: theme,
+    });
+    setUser(res.user);
+    setUnlocks((prev) => ({ ...prev, [poi.id]: res.unlock }));
+    setEasterEggs(res.easterEggs);
+    setDailyBounty(res.dailyBounty);
+    setTotalXp(res.totalXp);
+    sound8bit.syncViewpoint();
+    showToast(`⚡ Sbloccato: ${poi.name}`);
+  };
+
+  const handleLockPoi = async (poiId: string) => {
+    const res = await api.lockPoi({ poiId });
+    setUser(res.user);
+    setUnlocks(res.unlocks);
+    setEasterEggs(res.easterEggs);
+    setDailyBounty(res.dailyBounty);
+    setTotalXp(res.totalXp);
+    sound8bit.click();
+    const poiName = MARSALA_POIS.find((p) => p.id === poiId)?.name || poiId;
+    showToast(`🔒 Card & territorio ribloccati: ${poiName}`);
+  };
+
+  const handleUnlockAllPois = async () => {
+    const res = await api.unlockAllPois();
+    setUser(res.user);
+    setUnlocks(res.unlocks);
+    setEasterEggs(res.easterEggs);
+    setDailyBounty(res.dailyBounty);
+    setTotalXp(res.totalXp);
+    sound8bit.victoryMedal();
+    showToast("⚡ Tutti i 20 luoghi di Marsala sbloccati!");
+  };
+
+  const handleLockAllPois = async () => {
+    const res = await api.lockPoi({ all: true });
+    setUser(res.user);
+    setUnlocks(res.unlocks);
+    setEasterEggs(res.easterEggs);
+    setDailyBounty(res.dailyBounty);
+    setTotalXp(res.totalXp);
+    sound8bit.click();
+    showToast("🔒 Mappa completamente resettata (0/20)!");
+  };
+
+  const handleAdminEasterEgg = async (
+    action: "unlock" | "lock" | "unlock_all" | "lock_all",
+    eggId?: string,
+  ) => {
+    const res = await api.adminEasterEgg({ action, eggId });
+    setEasterEggs(res.easterEggs);
+    setTotalXp(res.totalXp);
+    if (action === "unlock" || action === "unlock_all") {
+      sound8bit.easterEgg();
+      showToast(
+        action === "unlock_all"
+          ? "⚡ Tutti i segreti sbloccati!"
+          : "🔓 Segreto sbloccato!",
+      );
+    } else {
+      sound8bit.click();
+      showToast(
+        action === "lock_all"
+          ? "🔒 Tutti i segreti ribloccati!"
+          : "🔒 Segreto ribloccato!",
+      );
     }
   };
 
@@ -697,6 +789,7 @@ export default function App() {
             showToast(`🧭 Percorso stradale avviato verso ${poi.name}!`);
           }}
           onSubmitUnlock={handleUnlockSubmit}
+          onLockPoi={handleLockPoi}
         />
       )}
 
@@ -705,6 +798,8 @@ export default function App() {
           avatar={user.avatar}
           titleId={user.title}
           nickname={user.nickname}
+          isSuperuser={Boolean(user.isSuperuser)}
+          superuserOverrides={user.superuserOverrides}
           unlockedCardsCount={unlockedCount}
           easterEggs={easterEggs}
           prestige={user.prestige}
@@ -712,12 +807,14 @@ export default function App() {
           editionsOwned={editionsOwned}
           onSave={handleSaveAvatar}
           onSaveTitle={handleSaveTitle}
+          onSaveSuperuserOverrides={handleSaveSuperuserOverrides}
           onClose={() => setShowWardrobe(false)}
         />
       )}
 
       {showDex && (
         <DexModal
+          isSuperuser={Boolean(user.isSuperuser)}
           unlocks={unlocks}
           easterEggs={easterEggs}
           dailyBounty={dailyBounty}
@@ -728,6 +825,11 @@ export default function App() {
           onToggleSortByNearest={toggleSortByNearest}
           onToggleOnlyMissing={toggleOnlyMissing}
           onSelectPoi={setSelectedPoi}
+          onQuickUnlockPoi={handleQuickUnlockPoi}
+          onLockPoi={handleLockPoi}
+          onUnlockAllPois={handleUnlockAllPois}
+          onLockAllPois={handleLockAllPois}
+          onAdminEasterEgg={handleAdminEasterEgg}
           onOpenPostcard={() => setShowPostcard(true)}
           onTrigger1860={handleTrigger1860}
           onTriggerPunic={handleTriggerPunic}

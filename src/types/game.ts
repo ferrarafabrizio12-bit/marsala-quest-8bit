@@ -1,4 +1,4 @@
-import type { AvatarConfig } from "../../shared/cosmetics";
+import type { AvatarConfig, SuperuserOverrides } from "../../shared/cosmetics";
 import type { CardEdition } from "../../shared/pois";
 
 export interface UserProfile {
@@ -11,6 +11,7 @@ export interface UserProfile {
   bountyStreak: number;
   lastBountyDate: string | null;
   isSuperuser?: boolean;
+  superuserOverrides?: SuperuserOverrides;
 }
 
 export interface UnlockData {

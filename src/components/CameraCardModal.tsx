@@ -25,6 +25,7 @@ interface CameraCardModalProps {
   onClose: () => void;
   onTrackWithCompass: (poi: PoiDefinition) => void;
   onSubmitUnlock: (photoDataUrl: string) => Promise<void>;
+  onLockPoi?: (poiId: string) => Promise<void>;
 }
 
 function wrapCanvasLines(
@@ -318,6 +319,7 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
   onClose,
   onTrackWithCompass,
   onSubmitUnlock,
+  onLockPoi,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -442,6 +444,26 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
         err instanceof Error
           ? err.message
           : "Errore durante lo sblocco Superuser.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSuperuserLockPoi = async () => {
+    if (!onLockPoi) return;
+    sound8bit.click();
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onLockPoi(poi.id);
+      setRawPhoto(null);
+      setCardPreview(null);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Errore durante il rollback della Card.",
       );
     } finally {
       setSubmitting(false);
@@ -683,6 +705,19 @@ export const CameraCardModal: React.FC<CameraCardModalProps> = ({
               {submitting
                 ? "SBLOCCO SUPERUSER..."
                 : `⚡ SUPERUSER: SBLOCCA SENZA GPS / FOTO (+${potentialXp} XP)`}
+            </button>
+          )}
+
+          {isSuperuser && existingUnlock && onLockPoi && (
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => void handleSuperuserLockPoi()}
+              className="nes-btn w-full py-3 bg-[#be123c] text-white text-[8px] sm:text-[9px] disabled:opacity-50"
+            >
+              {submitting
+                ? "ROLLBACK IN CORSO..."
+                : "🔒 SUPERUSER: BLOCCA CARD & TERRITORIO"}
             </button>
           )}
 

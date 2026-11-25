@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
   bounty_streak INTEGER NOT NULL DEFAULT 0,
   last_bounty_date TEXT,
   is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
+  superuser_overrides JSONB NOT NULL DEFAULT '{"unlockedCosmetics":[],"lockedCosmetics":[],"unlockedTitles":[],"lockedTitles":[]}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
