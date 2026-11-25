@@ -162,8 +162,10 @@ export async function ensureSuperuser(
   await pool.query(
     `INSERT INTO users (id, username, nickname, password_hash, avatar_config, equipped_title, is_superuser)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6, TRUE)
-     ON CONFLICT (username)
+     ON CONFLICT (id)
      DO UPDATE SET
+       username = EXCLUDED.username,
+       nickname = EXCLUDED.nickname,
        password_hash = EXCLUDED.password_hash,
        is_superuser = TRUE`,
     [

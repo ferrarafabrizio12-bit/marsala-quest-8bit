@@ -41,7 +41,6 @@ import {
 } from "../shared/pois.js";
 import {
   DEFAULT_AVATAR,
-  DEFAULT_TITLE_ID,
   getTitleById,
   getUnlockedCosmeticIds,
   isTitleUnlocked,
@@ -391,7 +390,6 @@ app.patch(
   },
 );
 
-// --- EQUIPAGGIA TITOLO SOTTO IL NICKNAME ---
 app.patch(
   "/api/auth/title",
   authMiddleware,
@@ -439,7 +437,6 @@ app.patch(
   },
 );
 
-// --- SUPERUSER: SBLOCCA / BLOCCA INDUMENTI E TITOLI ---
 app.patch(
   "/api/auth/superuser-overrides",
   authMiddleware,
@@ -462,15 +459,13 @@ app.patch(
       const nextOverrides = sanitizeSuperuserOverrides(body.overrides);
       await updateSuperuserOverrides(user.id, nextOverrides);
 
-      let nextAvatar = user.avatar;
       if (body.avatar) {
-        nextAvatar = sanitizeAvatarConfig(body.avatar);
+        const nextAvatar = sanitizeAvatarConfig(body.avatar);
         await updateUserAvatar(user.id, nextAvatar);
       }
 
-      let nextTitle = user.title;
       if (typeof body.title === "string") {
-        nextTitle = sanitizeTitleId(body.title);
+        const nextTitle = sanitizeTitleId(body.title);
         await updateUserTitle(user.id, nextTitle);
       }
 
@@ -483,7 +478,6 @@ app.patch(
   },
 );
 
-// --- ATTIVA MODALITÀ PRESTIGIO (NEW GAME+) ---
 app.post(
   "/api/progress/prestige",
   authMiddleware,
@@ -679,7 +673,6 @@ app.post(
   },
 );
 
-// --- SUPERUSER: SBLOCCA TUTTE LE 20 CARD IN UN COLPO SOLO ---
 app.post(
   "/api/progress/unlock-all",
   authMiddleware,
@@ -731,7 +724,6 @@ app.post(
   },
 );
 
-// --- SUPERUSER: ROLLBACK / BLOCCA SINGOLA CARD O TUTTE LE CARD ---
 app.post(
   "/api/progress/lock",
   authMiddleware,
@@ -805,7 +797,6 @@ app.post(
   },
 );
 
-// --- SUPERUSER: SBLOCCA / BLOCCA SINGOLO SEGRETO O TUTTI I SEGRETI ---
 app.post(
   "/api/progress/easter-egg/admin",
   authMiddleware,
@@ -889,16 +880,28 @@ console.log("[MARSALA QUEST 8-BIT API] Connessione a PostgreSQL in corso...");
 
 initDb()
   .then(async () => {
-    const superHash = await bcrypt.hash("Hacker00", 10);
-    await ensureSuperuser(
-      "00000000-0000-4000-8000-000000000001",
-      "fabbro",
-      "Fabbro",
-      superHash,
-    );
+    const superUser = (process.env.SUPERUSER_USERNAME || "")
+      .trim()
+      .toLowerCase();
+    const superNick = (process.env.SUPERUSER_NICKNAME || "Fabbro").trim();
+    const superPass = process.env.SUPERUSER_PASSWORD || "";
+
+    if (superUser && superPass) {
+      const superHash = await bcrypt.hash(superPass, 10);
+      await ensureSuperuser(
+        "00000000-0000-4000-8000-000000000001",
+        superUser,
+        superNick,
+        superHash,
+      );
+      console.log(
+        `[MARSALA QUEST 8-BIT API] Superuser "${superUser}" sincronizzato da env.`,
+      );
+    }
+
     app.listen(PORT, () => {
       console.log(
-        `[MARSALA QUEST 8-BIT API] Attiva su porta ${PORT} (PostgreSQL + Superuser OK)`,
+        `[MARSALA QUEST 8-BIT API] Attiva su porta ${PORT} (PostgreSQL OK)`,
       );
     });
   })
