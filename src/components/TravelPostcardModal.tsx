@@ -44,7 +44,7 @@ function latToTileY(lat: number, zoom: number): number {
 }
 
 /**
- * Renderizza la mappa reale di Marsala (tasselli proxy CORS-safe + puzzle Voronoi
+ * Renderizza la mappa reale di Marsala (tasselli Esri via proxy CORS-safe + puzzle Voronoi
  * colorato per i POI sbloccati / grigio per i POI mancanti + i 20 marker).
  */
 async function renderMarsalaRealMapSnapshot(
@@ -60,14 +60,14 @@ async function renderMarsalaRealMapSnapshot(
   ctx.fillStyle = "#0b192c";
   ctx.fillRect(0, 0, width, height);
 
-  // Calcola il rettangolo dei POI di Marsala e adatta l'ampiezza al formato 928x660 (zero bande vuote)
   const lats = MARSALA_POIS.map((p) => p.lat);
   const lngs = MARSALA_POIS.map((p) => p.lng);
-  const minLat = Math.min(...lats) - 0.012;
-  const maxLat = Math.max(...lats) + 0.012;
+  const minLat = Math.min(...lats) - 0.014;
+  const maxLat = Math.max(...lats) + 0.014;
   const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
 
-  const zoom = 13;
+  // Zoom 12: 12 tasselli totali ad alta definizione (~265px/tile) che coprono l'intera Marsala senza ritardi
+  const zoom = 12;
   const topTy = latToTileY(maxLat, zoom);
   const bottomTy = latToTileY(minLat, zoom);
   const spanY = bottomTy - topTy;
@@ -84,7 +84,7 @@ async function renderMarsalaRealMapSnapshot(
     y: (latToTileY(lat, zoom) - topTy) * tilePxSize,
   });
 
-  // 1. Scarica e disegna i tasselli reali della mappa di Marsala tramite il proxy backend
+  // 1. Scarica e disegna tutti i tasselli reali della mappa di Marsala tramite il proxy backend
   const startTx = Math.floor(leftTx);
   const endTx = Math.floor(rightTx);
   const startTy = Math.floor(topTy);
@@ -108,12 +108,12 @@ async function renderMarsalaRealMapSnapshot(
   const tiles = await Promise.all(tileJobs);
 
   ctx.save();
-  ctx.filter = "saturate(1.25) contrast(1.06)";
+  ctx.filter = "saturate(1.22) contrast(1.06)";
   for (const t of tiles) {
     if (!t) continue;
     const dx = (t.tx - leftTx) * tilePxSize;
     const dy = (t.ty - topTy) * tilePxSize;
-    ctx.drawImage(t.img, dx, dy, tilePxSize + 0.8, tilePxSize + 0.8);
+    ctx.drawImage(t.img, dx, dy, tilePxSize + 1, tilePxSize + 1);
   }
   ctx.restore();
 
@@ -183,7 +183,6 @@ async function renderMarsalaRealMapSnapshot(
     ctx.drawImage(fogCanvas, 0, 0, gw, gh, 0, 0, width, height);
     ctx.restore();
 
-    // Bordi dorati tra le tessere del puzzle sbloccate e quelle ancora grigie
     if (unlockedCount > 0) {
       ctx.save();
       ctx.fillStyle = "rgba(255, 209, 102, 0.55)";
@@ -385,7 +384,7 @@ export const TravelPostcardModal: React.FC<TravelPostcardModalProps> = ({
         434,
       );
 
-      // Mappa reale di Marsala con tasselli cartografici + puzzle colorato
+      // Mappa reale di Marsala con tasselli Esri + puzzle colorato
       const mapX = 76;
       const mapY = 486;
       const mapW = W - 152;

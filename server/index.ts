@@ -189,7 +189,7 @@ function buildSvgFallbackCard(
 }
 
 // --- CACHE & PROXY TASSELLI MAPPA DI MARSALA PER CARTOLINA DI VIAGGIO ---
-const tileCache = new Map<string, Buffer>();
+const tileCache = new Map<string, { buf: Buffer; contentType: string }>();
 
 function isValidMarsalaTile(z: number, x: number, y: number): boolean {
   if (!Number.isInteger(z) || !Number.isInteger(x) || !Number.isInteger(y))
@@ -217,46 +217,55 @@ app.get("/api/map-tile/:z/:x/:yPng", async (req: Request, res: Response) => {
     return;
   }
 
-  const key = `${z}/${x}/${y}`;
+  const key = `esri:${z}/${x}/${y}`;
   const cached = tileCache.get(key);
   if (cached) {
-    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Content-Type", cached.contentType);
     res.setHeader("Cache-Control", "public, max-age=86400");
-    res.send(cached);
+    res.send(cached.buf);
     return;
   }
 
+  // Esri World Street Map usa ordine /{z}/{y}/{x} e restituisce sempre la mappa reale completa senza segnaposto
   const sources = [
-    `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png`,
-    `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
+    `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${y}/${x}`,
+    `https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/${z}/${y}/${x}`,
   ];
 
   for (const url of sources) {
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 7000);
       const upstream = await fetch(url, {
+        signal: controller.signal,
         headers: {
-          "User-Agent":
-            "MarsalaQuest8Bit/1.0 (+https://marsala-quest-8bit.vercel.app)",
-          Accept: "image/png,image/*;q=0.8",
+          "User-Agent": "MarsalaQuest8Bit/1.0",
+          Accept: "image/png,image/jpeg,image/*;q=0.8",
         },
       });
+      clearTimeout(timer);
+
       if (!upstream.ok) continue;
+      const contentType = upstream.headers.get("content-type") || "image/jpeg";
+      if (!contentType.startsWith("image/")) continue;
+
       const arrBuf = await upstream.arrayBuffer();
       const buf = Buffer.from(arrBuf);
-      if (buf.length < 100) continue;
+      // Scarta eventuali immagini di errore/segnaposto troppo piccole
+      if (buf.length < 2000) continue;
 
       if (tileCache.size >= 400) {
         const firstKey = tileCache.keys().next().value;
         if (firstKey) tileCache.delete(firstKey);
       }
-      tileCache.set(key, buf);
+      tileCache.set(key, { buf, contentType });
 
-      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Content-Type", contentType);
       res.setHeader("Cache-Control", "public, max-age=86400");
       res.send(buf);
       return;
     } catch {
-      // Prova sorgente successiva
+      // Prova la sorgente successiva
     }
   }
 
