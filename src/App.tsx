@@ -727,6 +727,9 @@ export default function App() {
           nickname={user.nickname}
           totalXp={totalXp}
           easterEggCount={easterEggs.length}
+          prestige={user.prestige}
+          avatar={user.avatar}
+          titleId={user.title}
           onClose={() => setShowMedal(false)}
         />
       )}

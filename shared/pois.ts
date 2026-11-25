@@ -258,8 +258,8 @@ export const MARSALA_POIS: PoiDefinition[] = [
     zone: "Contrada Dammusello, 628",
     category: "STAGNONE_NORD",
     rarity: 2,
-    lat: 37.833,
-    lng: 12.4615,
+    lat: 37.8354,
+    lng: 12.4638,
     unlockRadiusMeters: 220,
     fogRevealRadiusMeters: 2200,
     xp: 210,
@@ -515,16 +515,54 @@ export function getCurrentCardEdition(
   return "standard";
 }
 
-/** Calcola il raggio di sblocco stile Assassin's Creed: stretto nel centro denso, più ampio per i POI isolati */
+function bearingDegrees(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const toDeg = (r: number) => (r * 180) / Math.PI;
+  const φ1 = toRad(lat1);
+  const φ2 = toRad(lat2);
+  const Δλ = toRad(lng2 - lng1);
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x =
+    Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+/**
+ * Calcola il raggio radiale "a puzzle": divide lo spazio attorno al POI in 8 settori (45°)
+ * e dimensiona il raggio affinché si congiunga a metà strada con i POI vicini in ogni direzione,
+ * evitando buchi grigi tra due zone sbloccate adiacenti.
+ */
 export function getAdaptiveFogRadiusMeters(poi: PoiDefinition): number {
-  const distances = MARSALA_POIS.filter((other) => other.id !== poi.id)
-    .map((other) => haversineMeters(poi.lat, poi.lng, other.lat, other.lng))
-    .sort((a, b) => a - b);
+  const sectorNearest = new Map<number, number>();
 
-  if (distances.length === 0) return 220;
+  for (const other of MARSALA_POIS) {
+    if (other.id === poi.id) continue;
+    const dist = haversineMeters(poi.lat, poi.lng, other.lat, other.lng);
+    const deg = bearingDegrees(poi.lat, poi.lng, other.lat, other.lng);
+    const sector = Math.floor(((deg + 22.5) % 360) / 45);
+    const prev = sectorNearest.get(sector);
+    if (prev === undefined || dist < prev) {
+      sectorNearest.set(sector, dist);
+    }
+  }
 
-  const nearestAvg =
-    distances.length >= 2 ? (distances[0] + distances[1]) / 2 : distances[0];
+  const sectorDistances = Array.from(sectorNearest.values()).sort(
+    (a, b) => a - b,
+  );
+  if (sectorDistances.length === 0) return 260;
 
-  return Math.max(130, Math.min(1850, Math.round(nearestAvg * 0.65)));
+  // 75° percentile tra i vicini nei diversi settori: copre i lati più aperti verso i POI adiacenti
+  const idx = Math.min(
+    sectorDistances.length - 1,
+    Math.floor((sectorDistances.length - 1) * 0.75),
+  );
+  const spanDist = sectorDistances[idx];
+
+  // 0.72 * distanza compensa la sfumatura radiale (68%->100%) così due POI vicini si saldano senza buchi
+  return Math.max(180, Math.min(2700, Math.round(spanDist * 0.72)));
 }
