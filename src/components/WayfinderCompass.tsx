@@ -75,17 +75,19 @@ export const WayfinderCompass: React.FC<WayfinderCompassProps> = ({
     : airDistance;
   const aimPoint = walkingRoute?.nextWaypoint ?? [targetPoi.lat, targetPoi.lng];
 
-  const bearing = hasGps
+  // Direzione geografica (0° = Nord) verso il prossimo incrocio/POI
+  const targetBearing = hasGps
     ? computeBearingDegrees(gps.lat!, gps.lng!, aimPoint[0], aimPoint[1])
     : null;
 
-  const hasOrientation = gps.heading !== null;
-  const relativeAngle =
-    bearing !== null
-      ? hasOrientation
-        ? (bearing - gps.heading! + 360) % 360
-        : bearing
-      : 0;
+  // Direzione verso cui stai puntando col telefono (0° = Nord, stesso riferimento della mappa)
+  const phoneHeading = gps.heading;
+  const arrowAngle = phoneHeading ?? targetBearing ?? 0;
+
+  const relativeTurn =
+    targetBearing !== null && phoneHeading !== null
+      ? (targetBearing - phoneHeading + 360) % 360
+      : null;
 
   const effectiveRadius = getEffectiveUnlockRadius(targetPoi, prestige);
   const gpsMargin = Math.min(Math.max(gps.accuracy || 0, 0), 45);
@@ -93,11 +95,11 @@ export const WayfinderCompass: React.FC<WayfinderCompassProps> = ({
     airDistance !== null && airDistance <= effectiveRadius + gpsMargin;
 
   const directionText =
-    bearing === null
+    targetBearing === null
       ? "ATTESA GPS..."
-      : hasOrientation
-        ? turnInstruction(relativeAngle)
-        : `VERSO ${cardinalItalian(bearing)}`;
+      : relativeTurn !== null
+        ? turnInstruction(relativeTurn)
+        : `VERSO ${cardinalItalian(targetBearing)}`;
 
   return (
     <div
@@ -107,18 +109,90 @@ export const WayfinderCompass: React.FC<WayfinderCompassProps> = ({
           : "bg-[#141b33]/95 border-[#ffd166]"
       }`}
     >
-      {/* Freccia Direzionale Grande e Chiara */}
-      <div className="w-12 h-12 bg-[#0b0e1a] border-2 border-[#4cc9f0] flex flex-col items-center justify-center shrink-0">
-        <span
-          className="text-2xl leading-none text-[#ff4d6d] transition-transform duration-200 inline-block drop-shadow-[0_0_4px_rgba(255,209,102,0.8)]"
-          style={{ transform: `rotate(${relativeAngle}deg)` }}
-        >
-          ▲
+      {/* Quadrato Bussola con punti cardinali fissi (N/S/E/O) e freccia contenuta */}
+      <button
+        type="button"
+        onClick={() => {
+          sound8bit.click();
+          void gps.requestCompassPermission();
+        }}
+        title="Bussola: tocca per calibrare"
+        className="w-14 h-14 bg-[#0b0e1a] border-2 border-[#4cc9f0] relative overflow-hidden shrink-0 flex items-center justify-center p-0"
+      >
+        {/* Punti cardinali fissi */}
+        <span className="absolute top-0.5 left-1/2 -translate-x-1/2 font-pixel text-[7px] text-[#ff4d6d] leading-none pointer-events-none">
+          N
         </span>
-        <span className="font-pixel text-[6px] text-[#ffd166] mt-1 leading-none">
-          {hasOrientation ? "TU ▲" : "MAPPA"}
+        <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 font-pixel text-[7px] text-[#94a3b8] leading-none pointer-events-none">
+          S
         </span>
-      </div>
+        <span className="absolute left-1 top-1/2 -translate-y-1/2 font-pixel text-[7px] text-[#94a3b8] leading-none pointer-events-none">
+          O
+        </span>
+        <span className="absolute right-1 top-1/2 -translate-y-1/2 font-pixel text-[7px] text-[#94a3b8] leading-none pointer-events-none">
+          E
+        </span>
+
+        {/* Anello + Pallino meta + Freccia direzionale contenuta nel quadrato */}
+        <svg viewBox="0 0 56 56" className="w-14 h-14 pointer-events-none">
+          <circle
+            cx="28"
+            cy="28"
+            r="15"
+            fill="none"
+            stroke="rgba(76, 201, 240, 0.25)"
+            strokeWidth="1.5"
+            strokeDasharray="2 2"
+          />
+
+          {/* Indicatore direzione della meta sull'anello */}
+          {targetBearing !== null && (
+            <g transform={`rotate(${targetBearing} 28 28)`}>
+              <circle
+                cx="28"
+                cy="13"
+                r="3.2"
+                fill="#38e54d"
+                stroke="#000000"
+                strokeWidth="1.2"
+              />
+            </g>
+          )}
+
+          {/* Freccia direzionale del telefono (sempre entro raggio 14px dal centro) */}
+          <g
+            transform={`rotate(${arrowAngle} 28 28)`}
+            style={{ transition: "transform 160ms linear" }}
+          >
+            {/* Coda + asta freccia */}
+            <rect
+              x="26.2"
+              y="22"
+              width="3.6"
+              height="15"
+              fill="#ffd166"
+              stroke="#000000"
+              strokeWidth="1"
+            />
+            {/* Punta freccia ben definita */}
+            <polygon
+              points="28,14 21.5,23 34.5,23"
+              fill="#ff4d6d"
+              stroke="#000000"
+              strokeWidth="1.2"
+            />
+            {/* Perno centrale */}
+            <circle
+              cx="28"
+              cy="28"
+              r="2.6"
+              fill="#ffffff"
+              stroke="#000000"
+              strokeWidth="1"
+            />
+          </g>
+        </svg>
+      </button>
 
       {/* Info Strada, Direzione e Distanza */}
       <div className="min-w-0 flex-1">

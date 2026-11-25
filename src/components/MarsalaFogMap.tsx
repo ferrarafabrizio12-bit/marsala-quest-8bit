@@ -319,7 +319,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     });
   }, [selectedPoi]);
 
-  // Percorso stradale pedonale lungo le vie (bordo nero + tratteggio rosso-oro ad alto contrasto)
+  // Percorso stradale pedonale lungo le vie
   useEffect(() => {
     const map = mainMapRef.current;
     if (!map) return;
@@ -480,53 +480,66 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
     onSelectPoi,
   ]);
 
-  // Avatar giocatore + Cono visivo ad alto contrasto + Click per aprire LOOK
+  // Avatar giocatore + Freccia direzionale che parte dal centro dell'omino
   useEffect(() => {
     const map = mainMapRef.current;
     if (!map || gps.lat === null || gps.lng === null) return;
 
     const avatarSvg = renderAvatarSvgString(avatar, 36, 44);
 
-    // Angolo del cono: bussola/movimento reale, oppure direzione prossima svolta se Guidami è attivo
     const fallbackAim =
       walkingRoute?.nextWaypoint ??
       (navTargetPoi ? [navTargetPoi.lat, navTargetPoi.lng] : null);
-    const effectiveConeDeg =
+    const arrowDeg =
       gps.heading !== null
         ? gps.heading
         : fallbackAim
           ? computeBearing(gps.lat, gps.lng, fallbackAim[0], fallbackAim[1])
-          : null;
+          : 0;
 
-    const coneHtml =
-      effectiveConeDeg !== null
-        ? `<div style="
-            position: absolute;
-            top: 24px;
-            left: 50%;
-            width: 96px;
-            height: 96px;
-            transform: translate(-50%, -50%) rotate(${effectiveConeDeg}deg);
-            pointer-events: none;
-            z-index: 1;
-          ">
-            <svg viewBox="0 0 96 96" width="96" height="96">
-              <polygon
-                points="48,4 22,48 74,48"
-                fill="rgba(255, 209, 102, 0.45)"
-                stroke="#0b0e1a"
-                stroke-width="2.5"
-              />
-              <polygon
-                points="48,8 30,46 66,46"
-                fill="none"
-                stroke="#ffd166"
-                stroke-width="2"
-                stroke-dasharray="4 3"
-              />
-            </svg>
-          </div>`
-        : "";
+    // Freccia che nasce dal centro del busto dell'omino (50, 50) e punta nella direzione del telefono
+    const arrowHtml = `
+      <div style="
+        position: absolute;
+        top: 22px;
+        left: 50%;
+        width: 108px;
+        height: 108px;
+        transform: translate(-50%, -50%) rotate(${arrowDeg}deg);
+        transition: transform 160ms linear;
+        pointer-events: none;
+        z-index: 3;
+      ">
+        <svg viewBox="0 0 108 108" width="108" height="108">
+          <!-- Asta della freccia che parte dal centro (54, 54) -->
+          <rect
+            x="51"
+            y="21"
+            width="6"
+            height="33"
+            fill="#ffd166"
+            stroke="#000000"
+            stroke-width="2"
+          />
+          <!-- Punta della freccia -->
+          <polygon
+            points="54,6 42,23 66,23"
+            fill="#ff4d6d"
+            stroke="#000000"
+            stroke-width="2.2"
+          />
+          <!-- Perno centrale sull'omino -->
+          <circle
+            cx="54"
+            cy="54"
+            r="4.5"
+            fill="#ffd166"
+            stroke="#000000"
+            stroke-width="2"
+          />
+        </svg>
+      </div>
+    `;
 
     const playerIcon = L.divIcon({
       className: "bg-transparent border-0",
@@ -536,7 +549,6 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
           class="flex flex-col items-center"
           title="Tocca per personalizzare il tuo Look"
         >
-          ${coneHtml}
           <div style="position: relative; z-index: 2;" class="flex flex-col items-center">
             ${avatarSvg}
             <span style="
@@ -550,6 +562,7 @@ export const MarsalaFogMap: React.FC<MarsalaFogMapProps> = ({
               box-shadow: 2px 2px 0 #000;
             ">TU</span>
           </div>
+          ${arrowHtml}
         </div>
       `,
       iconSize: [0, 0],
