@@ -1,27 +1,59 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { EASTER_EGGS, MARSALA_POIS, type PoiDefinition } from '../shared/pois';
-import { type AvatarConfig, COSMETICS_CATALOG } from '../shared/cosmetics';
-import { api, getStoredToken, setStoredToken } from './services/api';
-import { useRealGps } from './hooks/useRealGps';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  EASTER_EGGS,
+  MARSALA_POIS,
+  type PoiDefinition,
+  getDailyBountyPoiId,
+  getItalyDateString,
+} from "../shared/pois";
+import {
+  type AvatarConfig,
+  COSMETICS_CATALOG,
+  getTitleById,
+} from "../shared/cosmetics";
+import { api, getStoredToken, setStoredToken } from "./services/api";
+import { useRealGps } from "./hooks/useRealGps";
 import {
   isLilibeoNightHour,
   isStagnoneSunsetHour,
   useKonamiCode,
-} from './hooks/useEasterEggs';
-import { sound8bit } from './utils/sound8bit';
-import { AuthScreen } from './components/AuthScreen';
-import { MarsalaFogMap } from './components/MarsalaFogMap';
-import { CameraCardModal } from './components/CameraCardModal';
-import { LilibeoMedalModal } from './components/LilibeoMedalModal';
-import { AvatarWardrobeModal } from './components/AvatarWardrobeModal';
-import { BottomDock, DexModal, HudBar, LeaderboardModal } from './components/HudAndDex';
+} from "./hooks/useEasterEggs";
+import { sound8bit } from "./utils/sound8bit";
+import { AuthScreen } from "./components/AuthScreen";
+import { MarsalaFogMap } from "./components/MarsalaFogMap";
+import { CameraCardModal } from "./components/CameraCardModal";
+import { LilibeoMedalModal } from "./components/LilibeoMedalModal";
+import { AvatarWardrobeModal } from "./components/AvatarWardrobeModal";
+import { WayfinderCompass } from "./components/WayfinderCompass";
+import { TravelPostcardModal } from "./components/TravelPostcardModal";
+import {
+  BottomDock,
+  DexModal,
+  HudBar,
+  LeaderboardModal,
+} from "./components/HudAndDex";
 import type {
   DailyBountyInfo,
   LeaderboardEntry,
   RetroTheme,
   UnlockData,
   UserProfile,
-} from './types/game';
+} from "./types/game";
+
+function buildFallbackDailyBounty(
+  lastBountyDate?: string | null,
+  bountyStreak = 0,
+): DailyBountyInfo {
+  const today = getItalyDateString();
+  const completedToday = lastBountyDate === today;
+  const nextStreak = completedToday ? bountyStreak : bountyStreak + 1;
+  return {
+    poiId: getDailyBountyPoiId(today),
+    date: today,
+    completedToday,
+    bonusXp: nextStreak >= 3 ? 150 : 100,
+  };
+}
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -29,20 +61,24 @@ export default function App() {
   const [slowBoot, setSlowBoot] = useState(false);
   const [unlocks, setUnlocks] = useState<Record<string, UnlockData>>({});
   const [easterEggs, setEasterEggs] = useState<string[]>([]);
-  const [dailyBounty, setDailyBounty] = useState<DailyBountyInfo | null>(null);
+  const [dailyBounty, setDailyBounty] = useState<DailyBountyInfo>(() =>
+    buildFallbackDailyBounty(),
+  );
   const [totalXp, setTotalXp] = useState(0);
 
   const [selectedPoi, setSelectedPoi] = useState<PoiDefinition | null>(null);
+  const [navTargetPoi, setNavTargetPoi] = useState<PoiDefinition | null>(null);
   const [justSyncedPoiId, setJustSyncedPoiId] = useState<string | null>(null);
   const [showDex, setShowDex] = useState(false);
   const [showWardrobe, setShowWardrobe] = useState(false);
+  const [showPostcard, setShowPostcard] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [showMedal, setShowMedal] = useState(false);
   const [showPrestigeConfirm, setShowPrestigeConfirm] = useState(false);
   const [activatingPrestige, setActivatingPrestige] = useState(false);
 
-  const [theme, setTheme] = useState<RetroTheme>('default');
+  const [theme, setTheme] = useState<RetroTheme>("default");
   const [crtEnabled, setCrtEnabled] = useState(true);
   const [muted, setMuted] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -61,6 +97,7 @@ export default function App() {
   const gps = useRealGps(Boolean(user));
   const unlockedCount = Object.keys(unlocks).length;
   const isCompleted = unlockedCount >= MARSALA_POIS.length;
+  const editionsOwned = Object.values(unlocks).map((u) => u.edition);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -74,7 +111,13 @@ export default function App() {
       setUser(data.user);
       setUnlocks(data.unlocks);
       setEasterEggs(data.easterEggs);
-      setDailyBounty(data.dailyBounty);
+      setDailyBounty(
+        data.dailyBounty ??
+          buildFallbackDailyBounty(
+            data.user.lastBountyDate,
+            data.user.bountyStreak,
+          ),
+      );
       setTotalXp(data.totalXp);
     } catch {
       setStoredToken(null);
@@ -102,40 +145,42 @@ export default function App() {
         const def = EASTER_EGGS.find((e) => e.id === eggId);
         if (def) {
           const rewardItems = COSMETICS_CATALOG.filter(
-            (c) => c.requirement.type === 'easter_egg' && c.requirement.eggId === eggId
+            (c) =>
+              c.requirement.type === "easter_egg" &&
+              c.requirement.eggId === eggId,
           );
           const rewardSuffix =
             res.isNew && rewardItems.length > 0
-              ? ` • 👕 Sbloccato in LOOK: ${rewardItems.map((r) => r.name).join(' + ')}!`
-              : '';
+              ? ` • 👕 Sbloccato in LOOK: ${rewardItems.map((r) => r.name).join(" + ")}!`
+              : "";
           showToast(
             res.isNew
               ? `🎉 SEGRETO: ${def.badge} ${def.title} (+${def.xp} XP)${rewardSuffix}`
-              : `${def.badge} ${def.title} attivo!`
+              : `${def.badge} ${def.title} attivo!`,
           );
         }
       } catch {
         // Ignora se offline
       }
     },
-    [user, showToast]
+    [user, showToast],
   );
 
   const activateGameBoy = useCallback(() => {
-    setTheme((prev) => (prev === 'gameboy' ? 'default' : 'gameboy'));
-    void triggerEasterEgg('konami-gameboy');
+    setTheme((prev) => (prev === "gameboy" ? "default" : "gameboy"));
+    void triggerEasterEgg("konami-gameboy");
   }, [triggerEasterEgg]);
 
   useKonamiCode(activateGameBoy);
 
   useEffect(() => {
     if (!user) return;
-    if (isStagnoneSunsetHour() && !easterEggs.includes('tramonto-stagnone')) {
-      setTheme('sunset');
-      void triggerEasterEgg('tramonto-stagnone');
-    } else if (isLilibeoNightHour() && !easterEggs.includes('notte-lilibeo')) {
-      setTheme('night');
-      void triggerEasterEgg('notte-lilibeo');
+    if (isStagnoneSunsetHour() && !easterEggs.includes("tramonto-stagnone")) {
+      setTheme("sunset");
+      void triggerEasterEgg("tramonto-stagnone");
+    } else if (isLilibeoNightHour() && !easterEggs.includes("notte-lilibeo")) {
+      setTheme("night");
+      void triggerEasterEgg("notte-lilibeo");
     }
   }, [user, easterEggs, triggerEasterEgg]);
 
@@ -164,8 +209,8 @@ export default function App() {
     skyTapsRef.current += 1;
     if (skyTapsRef.current >= 3) {
       skyTapsRef.current = 0;
-      setTheme((prev) => (prev === 'sunset' ? 'default' : 'sunset'));
-      void triggerEasterEgg('tramonto-stagnone');
+      setTheme((prev) => (prev === "sunset" ? "default" : "sunset"));
+      void triggerEasterEgg("tramonto-stagnone");
     }
   };
 
@@ -174,8 +219,8 @@ export default function App() {
     progressTapsRef.current += 1;
     if (progressTapsRef.current >= 4) {
       progressTapsRef.current = 0;
-      setTheme((prev) => (prev === 'night' ? 'default' : 'night'));
-      void triggerEasterEgg('notte-lilibeo');
+      setTheme((prev) => (prev === "night" ? "default" : "night"));
+      void triggerEasterEgg("notte-lilibeo");
     }
   };
 
@@ -184,14 +229,14 @@ export default function App() {
     if (fitMapTapsRef.current >= 5) {
       fitMapTapsRef.current = 0;
       setShowStagnoneKites(true);
-      void triggerEasterEgg('vento-stagnone');
+      void triggerEasterEgg("vento-stagnone");
       setTimeout(() => setShowStagnoneKites(false), 6200);
     }
   };
 
   const handleRadarTap = () => {
     sound8bit.click();
-    if (gps.status !== 'LOCKED') {
+    if (gps.status !== "LOCKED") {
       gps.retry();
       return;
     }
@@ -199,28 +244,35 @@ export default function App() {
     if (radarTapsRef.current >= 5) {
       radarTapsRef.current = 0;
       setSibillaDialog(true);
-      void triggerEasterEgg('oracolo-sibilla');
+      void triggerEasterEgg("oracolo-sibilla");
     }
   };
 
   const handleTrigger1860 = () => {
     setShowDex(false);
     setShowShips1860(true);
-    void triggerEasterEgg('sbarco-1860');
+    void triggerEasterEgg("sbarco-1860");
     setTimeout(() => setShowShips1860(false), 6800);
   };
 
   const handleTriggerPunic = () => {
     setShowDex(false);
     setShowPunicShip(true);
-    void triggerEasterEgg('nave-punica');
+    void triggerEasterEgg("nave-punica");
     setTimeout(() => setShowPunicShip(false), 6800);
   };
 
   const handleSaveAvatar = async (nextAvatar: AvatarConfig) => {
     const res = await api.updateAvatar(nextAvatar);
     setUser((prev) => (prev ? { ...prev, avatar: res.avatar } : prev));
-    showToast('👕 Nuovo look salvato su mappa e classifica!');
+    showToast("👕 Nuovo look salvato su mappa e classifica!");
+  };
+
+  const handleSaveTitle = async (nextTitleId: string) => {
+    const res = await api.updateTitle(nextTitleId);
+    const titleObj = getTitleById(res.title);
+    setUser((prev) => (prev ? { ...prev, title: res.title } : prev));
+    showToast(`🏷️ Titolo equipaggiato: ${titleObj.icon} ${titleObj.label}`);
   };
 
   const handleConfirmPrestige = async () => {
@@ -230,15 +282,24 @@ export default function App() {
       setUser(res.user);
       setUnlocks(res.unlocks);
       setEasterEggs(res.easterEggs);
-      setDailyBounty(res.dailyBounty);
+      setDailyBounty(
+        res.dailyBounty ??
+          buildFallbackDailyBounty(
+            res.user.lastBountyDate,
+            res.user.bountyStreak,
+          ),
+      );
       setTotalXp(res.totalXp);
+      setNavTargetPoi(null);
       setShowPrestigeConfirm(false);
       sound8bit.victoryMedal();
       showToast(
-        `⚡ PRESTIGIO ★${res.user.prestige} ATTIVATO! Card Olografiche & nuovi capi in LOOK!`
+        `⚡ PRESTIGIO ★${res.user.prestige} ATTIVATO! Card Olografiche & nuovi capi in LOOK!`,
       );
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Errore attivazione Prestigio.');
+      showToast(
+        err instanceof Error ? err.message : "Errore attivazione Prestigio.",
+      );
     } finally {
       setActivatingPrestige(false);
     }
@@ -253,6 +314,7 @@ export default function App() {
       lng: gps.lng,
       accuracy: gps.accuracy || 0,
       photoDataUrl,
+      requestedEdition: theme,
     });
 
     const nextUnlocks = { ...unlocks, [selectedPoi.id]: res.unlock };
@@ -260,8 +322,17 @@ export default function App() {
     setUser(res.user);
     setUnlocks(nextUnlocks);
     setEasterEggs(res.easterEggs);
-    setDailyBounty(res.dailyBounty);
+    setDailyBounty(
+      res.dailyBounty ??
+        buildFallbackDailyBounty(
+          res.user.lastBountyDate,
+          res.user.bountyStreak,
+        ),
+    );
     setTotalXp(res.totalXp);
+    if (navTargetPoi?.id === selectedPoi.id) {
+      setNavTargetPoi(null);
+    }
     setSelectedPoi(null);
 
     sound8bit.syncViewpoint();
@@ -270,21 +341,33 @@ export default function App() {
     const cardCosmetic =
       nextCount > prevCount && res.user.prestige === 0
         ? COSMETICS_CATALOG.find(
-            (c) => c.requirement.type === 'cards' && c.requirement.count === nextCount
+            (c) =>
+              c.requirement.type === "cards" &&
+              c.requirement.count === nextCount,
           )
         : undefined;
 
     if (res.bountyClaimedNow) {
       showToast(
-        `🎯 OBIETTIVO DEL GIORNO COMPLETATO (+${res.bountyXpAwarded} XP • Streak 🔥${res.user.bountyStreak}d)!`
+        `🎯 OBIETTIVO DEL GIORNO COMPLETATO (+${res.bountyXpAwarded} XP • Streak 🔥${res.user.bountyStreak}d)!`,
+      );
+    } else if (res.editionBonusXp > 0) {
+      const edLabel =
+        res.unlock.edition === "golden_hour"
+          ? "🌅 GOLDEN HOUR"
+          : "🌙 NIGHT EDITION";
+      showToast(
+        `${edLabel} SBLOCCATA: ${selectedPoi.name} (+${res.editionBonusXp} XP bonus)!`,
       );
     } else if (cardCosmetic) {
-      showToast(`★ ZONA COLORATA: ${selectedPoi.name} • 👕 Sbloccato: ${cardCosmetic.name}!`);
+      showToast(
+        `★ ZONA COLORATA: ${selectedPoi.name} • 👕 Sbloccato: ${cardCosmetic.name}!`,
+      );
     } else {
       showToast(
         res.unlock.isHolo
           ? `✦ CARD HOLO: ${selectedPoi.name} (+${res.unlock.xpEarned} XP)`
-          : `★ ZONA COLORATA: ${selectedPoi.name} (+${res.unlock.xpEarned} XP)`
+          : `★ ZONA COLORATA: ${selectedPoi.name} (+${res.unlock.xpEarned} XP)`,
       );
     }
 
@@ -293,10 +376,15 @@ export default function App() {
     (res.newlyUnlockedEggs || []).forEach((eggId, idx) => {
       const def = EASTER_EGGS.find((e) => e.id === eggId);
       if (def) {
-        setTimeout(() => {
-          sound8bit.easterEgg();
-          showToast(`${def.badge} ${def.title.toUpperCase()} (+${def.xp} XP) • 👕 Nuovo capo!`);
-        }, 2100 + idx * 2400);
+        setTimeout(
+          () => {
+            sound8bit.easterEgg();
+            showToast(
+              `${def.badge} ${def.title.toUpperCase()} (+${def.xp} XP) • 👕 Nuovo capo!`,
+            );
+          },
+          2100 + idx * 2400,
+        );
       }
     });
 
@@ -314,7 +402,7 @@ export default function App() {
       setLeaderboard(data.leaderboard);
       setShowLeaderboard(true);
     } catch {
-      showToast('Impossibile caricare gli High Scores.');
+      showToast("Impossibile caricare gli High Scores.");
     }
   };
 
@@ -324,18 +412,22 @@ export default function App() {
     setUser(null);
     setUnlocks({});
     setEasterEggs([]);
-    setDailyBounty(null);
+    setDailyBounty(buildFallbackDailyBounty());
+    setNavTargetPoi(null);
     setTotalXp(0);
-    setTheme('default');
+    setTheme("default");
   };
 
   if (booting) {
     return (
       <div className="h-[100dvh] w-screen flex flex-col items-center justify-center p-6 text-center bg-[#0b0e1a] gap-3">
-        <p className="font-pixel text-xs text-[#ffd166]">CARICAMENTO LILIBEO...</p>
+        <p className="font-pixel text-xs text-[#ffd166]">
+          CARICAMENTO LILIBEO...
+        </p>
         {slowBoot && (
           <p className="text-xl text-[#4cc9f0] max-w-xs">
-            Risveglio del server in corso (al primo accesso su Render può impiegare 20–30 secondi).
+            Risveglio del server in corso (al primo accesso su Render può
+            impiegare 20–30 secondi).
           </p>
         )}
       </div>
@@ -354,16 +446,18 @@ export default function App() {
   }
 
   const themeClass =
-    theme === 'gameboy'
-      ? 'theme-gameboy'
-      : theme === 'sunset'
-        ? 'theme-sunset'
-        : theme === 'night'
-          ? 'theme-night'
-          : '';
+    theme === "gameboy"
+      ? "theme-gameboy"
+      : theme === "sunset"
+        ? "theme-sunset"
+        : theme === "night"
+          ? "theme-night"
+          : "";
 
   return (
-    <main className={`relative w-screen h-[100dvh] overflow-hidden ${themeClass}`}>
+    <main
+      className={`relative w-screen h-[100dvh] overflow-hidden ${themeClass}`}
+    >
       <HudBar
         user={user}
         unlockedCount={unlockedCount}
@@ -380,13 +474,25 @@ export default function App() {
       <MarsalaFogMap
         gps={gps}
         avatar={user.avatar}
-        dailyBountyPoiId={dailyBounty?.poiId || ''}
+        dailyBountyPoiId={dailyBounty.poiId}
         selectedPoi={selectedPoi}
+        navTargetPoi={navTargetPoi}
         unlocks={unlocks}
         justSyncedPoiId={justSyncedPoiId}
         onSelectPoi={setSelectedPoi}
         onFitMarsalaTap={handleFitMarsalaTap}
       />
+
+      {/* Bussola direzionale verso il POI puntato */}
+      {navTargetPoi && !selectedPoi && (
+        <WayfinderCompass
+          targetPoi={navTargetPoi}
+          gps={gps}
+          prestige={user.prestige}
+          onOpenPoi={(poi) => setSelectedPoi(poi)}
+          onClearTarget={() => setNavTargetPoi(null)}
+        />
+      )}
 
       <BottomDock
         unlockedCount={unlockedCount}
@@ -409,13 +515,13 @@ export default function App() {
       )}
 
       {toast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[1100] nes-box-gold px-3.5 py-2 text-xl text-[#ffd166] text-center max-w-[92vw]">
+        <div className="fixed bottom-36 left-1/2 -translate-x-1/2 z-[1100] nes-box-gold px-3.5 py-2 text-xl text-[#ffd166] text-center max-w-[92vw]">
           {toast}
         </div>
       )}
 
       {showShips1860 && (
-        <div className="fixed bottom-32 left-0 z-[1150] pointer-events-none ship-sail flex items-center gap-4 nes-box-gold px-3.5 py-2">
+        <div className="fixed bottom-36 left-0 z-[1150] pointer-events-none ship-sail flex items-center gap-4 nes-box-gold px-3.5 py-2">
           <span className="text-3xl">🚢</span>
           <span className="font-pixel text-[9px] text-[#ffd166]">
             11 MAGGIO 1860 • PIEMONTE &amp; LOMBARDO!
@@ -452,8 +558,8 @@ export default function App() {
               ORACOLO DELLA SIBILLA LILIBETANA
             </h3>
             <p className="text-2xl text-[#f4f1de] mb-4 leading-snug">
-              &laquo;Chi percorre Capo Boeo fino alle acque rosa dello Stagnone risveglierà tutti i
-              colori di Lilibeo, {user.nickname}.&raquo;
+              &laquo;Chi percorre Capo Boeo fino alle acque rosa dello Stagnone
+              risveglierà tutti i colori di Lilibeo, {user.nickname}.&raquo;
             </p>
             <button
               onClick={() => setSibillaDialog(false)}
@@ -465,7 +571,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Modale Conferma New Game+ (Prestigio) */}
       {showPrestigeConfirm && (
         <div className="fixed inset-0 z-[1150] bg-black/85 flex items-center justify-center p-4">
           <div className="nes-box-gold holo-card max-w-md p-5 text-center">
@@ -475,10 +580,11 @@ export default function App() {
             </h3>
             <p className="text-xl text-[#f4f1de] mb-4 leading-snug">
               Hai illuminato tutta Marsala! Attivando il Prestigio:
-              <br />• Conservi tutti gli <strong>XP</strong>, i <strong>vestiti</strong> e gli{' '}
-              <strong>Easter Egg</strong>.
-              <br />• La mappa torna grigia per una nuova sfida con <strong>raggio GPS stretto</strong>,{' '}
-              <strong>+25% XP</strong> e <strong>Card Olografiche ✦</strong>!
+              <br />• Conservi tutti gli <strong>XP</strong>, i{" "}
+              <strong>vestiti</strong> e gli <strong>Easter Egg</strong>.
+              <br />• La mappa torna grigia per una nuova sfida con{" "}
+              <strong>raggio GPS stretto</strong>, <strong>+25% XP</strong> e{" "}
+              <strong>Card Olografiche ✦</strong>!
             </p>
             <div className="grid grid-cols-2 gap-2.5">
               <button
@@ -495,7 +601,7 @@ export default function App() {
                 onClick={() => void handleConfirmPrestige()}
                 className="nes-btn py-2.5 bg-[#c026d3] text-white text-[9px]"
               >
-                {activatingPrestige ? 'ATTIVAZIONE...' : '★ AVVIA PRESTIGIO'}
+                {activatingPrestige ? "ATTIVAZIONE..." : "★ AVVIA PRESTIGIO"}
               </button>
             </div>
           </div>
@@ -507,12 +613,18 @@ export default function App() {
           poi={selectedPoi}
           nickname={user.nickname}
           prestige={user.prestige}
-          isDailyBounty={dailyBounty?.poiId === selectedPoi.id}
-          bountyCompletedToday={Boolean(dailyBounty?.completedToday)}
-          bountyBonusXp={dailyBounty?.bonusXp || 100}
+          theme={theme}
+          isDailyBounty={dailyBounty.poiId === selectedPoi.id}
+          bountyCompletedToday={dailyBounty.completedToday}
+          bountyBonusXp={dailyBounty.bonusXp}
           gps={gps}
           existingUnlock={unlocks[selectedPoi.id]}
           onClose={() => setSelectedPoi(null)}
+          onTrackWithCompass={(poi) => {
+            setNavTargetPoi(poi);
+            setSelectedPoi(null);
+            showToast(`🧭 Bussola puntata su ${poi.name}!`);
+          }}
           onSubmitUnlock={handleUnlockSubmit}
         />
       )}
@@ -520,11 +632,15 @@ export default function App() {
       {showWardrobe && (
         <AvatarWardrobeModal
           avatar={user.avatar}
+          titleId={user.title}
           nickname={user.nickname}
           unlockedCardsCount={unlockedCount}
           easterEggs={easterEggs}
           prestige={user.prestige}
+          bountyStreak={user.bountyStreak}
+          editionsOwned={editionsOwned}
           onSave={handleSaveAvatar}
+          onSaveTitle={handleSaveTitle}
           onClose={() => setShowWardrobe(false)}
         />
       )}
@@ -535,10 +651,22 @@ export default function App() {
           easterEggs={easterEggs}
           dailyBounty={dailyBounty}
           bountyStreak={user.bountyStreak}
+          gps={gps}
           onSelectPoi={setSelectedPoi}
+          onOpenPostcard={() => setShowPostcard(true)}
           onTrigger1860={handleTrigger1860}
           onTriggerPunic={handleTriggerPunic}
           onClose={() => setShowDex(false)}
+        />
+      )}
+
+      {showPostcard && (
+        <TravelPostcardModal
+          user={user}
+          unlocks={unlocks}
+          easterEggsCount={easterEggs.length}
+          totalXp={totalXp}
+          onClose={() => setShowPostcard(false)}
         />
       )}
 

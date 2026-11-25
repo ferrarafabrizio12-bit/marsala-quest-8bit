@@ -1,8 +1,16 @@
-import type { AvatarConfig, AvatarGender } from '../../shared/cosmetics';
-import type { DailyBountyInfo, LeaderboardEntry, UnlockData, UserProfile } from '../types/game';
+import type { AvatarConfig, AvatarGender } from "../../shared/cosmetics";
+import type {
+  DailyBountyInfo,
+  LeaderboardEntry,
+  RetroTheme,
+  UnlockData,
+  UserProfile,
+} from "../types/game";
 
-const TOKEN_KEY = 'marsala_quest_jwt';
-const API_BASE = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+const TOKEN_KEY = "marsala_quest_jwt";
+const API_BASE = (import.meta.env.VITE_API_URL || "")
+  .trim()
+  .replace(/\/+$/, "");
 
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -16,7 +24,7 @@ export function setStoredToken(token: string | null): void {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getStoredToken();
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -36,27 +44,33 @@ export const api = {
     password: string;
     gender: AvatarGender;
   }) =>
-    request<{ token: string; user: UserProfile }>('/auth/register', {
-      method: 'POST',
+    request<{ token: string; user: UserProfile }>("/auth/register", {
+      method: "POST",
       body: JSON.stringify(payload),
     }),
 
   login: (payload: { username: string; password: string }) =>
-    request<{ token: string; user: UserProfile }>('/auth/login', {
-      method: 'POST',
+    request<{ token: string; user: UserProfile }>("/auth/login", {
+      method: "POST",
       body: JSON.stringify(payload),
     }),
 
   updateNickname: (nickname: string) =>
-    request<{ nickname: string }>('/auth/nickname', {
-      method: 'PATCH',
+    request<{ nickname: string }>("/auth/nickname", {
+      method: "PATCH",
       body: JSON.stringify({ nickname }),
     }),
 
   updateAvatar: (avatar: AvatarConfig) =>
-    request<{ avatar: AvatarConfig }>('/auth/avatar', {
-      method: 'PATCH',
+    request<{ avatar: AvatarConfig }>("/auth/avatar", {
+      method: "PATCH",
       body: JSON.stringify(avatar),
+    }),
+
+  updateTitle: (titleId: string) =>
+    request<{ title: string }>("/auth/title", {
+      method: "PATCH",
+      body: JSON.stringify({ titleId }),
     }),
 
   getProgress: () =>
@@ -66,7 +80,7 @@ export const api = {
       easterEggs: string[];
       dailyBounty: DailyBountyInfo;
       totalXp: number;
-    }>('/progress'),
+    }>("/progress"),
 
   activatePrestige: () =>
     request<{
@@ -75,8 +89,8 @@ export const api = {
       easterEggs: string[];
       dailyBounty: DailyBountyInfo;
       totalXp: number;
-    }>('/progress/prestige', {
-      method: 'POST',
+    }>("/progress/prestige", {
+      method: "POST",
     }),
 
   unlockPoi: (payload: {
@@ -85,26 +99,32 @@ export const api = {
     lng: number;
     accuracy: number;
     photoDataUrl: string;
+    requestedEdition?: RetroTheme;
   }) =>
     request<{
       unlock: UnlockData;
       user: UserProfile;
       easterEggs: string[];
       newlyUnlockedEggs: string[];
+      editionBonusXp: number;
       bountyClaimedNow: boolean;
       bountyXpAwarded: number;
       dailyBounty: DailyBountyInfo;
       totalXp: number;
-    }>('/progress/unlock', {
-      method: 'POST',
+    }>("/progress/unlock", {
+      method: "POST",
       body: JSON.stringify(payload),
     }),
 
   claimEasterEgg: (eggId: string) =>
-    request<{ isNew: boolean; easterEggs: string[]; totalXp: number }>('/progress/easter-egg', {
-      method: 'POST',
-      body: JSON.stringify({ eggId }),
-    }),
+    request<{ isNew: boolean; easterEggs: string[]; totalXp: number }>(
+      "/progress/easter-egg",
+      {
+        method: "POST",
+        body: JSON.stringify({ eggId }),
+      },
+    ),
 
-  getLeaderboard: () => request<{ leaderboard: LeaderboardEntry[] }>('/leaderboard'),
+  getLeaderboard: () =>
+    request<{ leaderboard: LeaderboardEntry[] }>("/leaderboard"),
 };

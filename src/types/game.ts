@@ -1,10 +1,12 @@
-import type { AvatarConfig } from '../../shared/cosmetics';
+import type { AvatarConfig } from "../../shared/cosmetics";
+import type { CardEdition } from "../../shared/pois";
 
 export interface UserProfile {
   id: string;
   username: string;
   nickname: string;
   avatar: AvatarConfig;
+  title: string;
   prestige: number;
   bountyStreak: number;
   lastBountyDate: string | null;
@@ -19,6 +21,7 @@ export interface UnlockData {
   accuracy: number;
   xpEarned: number;
   isHolo: boolean;
+  edition: CardEdition;
 }
 
 export interface DailyBountyInfo {
@@ -31,6 +34,7 @@ export interface DailyBountyInfo {
 export interface LeaderboardEntry {
   nickname: string;
   avatar: AvatarConfig;
+  title: string;
   prestige: number;
   bountyStreak: number;
   unlockedCount: number;
@@ -39,4 +43,4 @@ export interface LeaderboardEntry {
   totalXp: number;
 }
 
-export type RetroTheme = 'default' | 'gameboy' | 'sunset' | 'night';
+export type RetroTheme = "default" | "gameboy" | "sunset" | "night";

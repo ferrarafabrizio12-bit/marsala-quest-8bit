@@ -4,133 +4,124 @@ export interface RealGpsState {
   lat: number | null;
   lng: number | null;
   accuracy: number | null;
-  status: "SEARCHING" | "LOCKED" | "DENIED" | "UNAVAILABLE" | "ERROR";
+  heading: number | null;
+  status: "SEARCHING" | "LOCKED" | "ERROR";
   errorMessage: string | null;
-  lastUpdate: number | null;
   retry: () => void;
 }
 
 export function useRealGps(enabled: boolean): RealGpsState {
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [gpsHeading, setGpsHeading] = useState<number | null>(null);
+  const [compassHeading, setCompassHeading] = useState<number | null>(null);
+  const [status, setStatus] = useState<"SEARCHING" | "LOCKED" | "ERROR">(
+    "SEARCHING",
+  );
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
   const watchIdRef = useRef<number | null>(null);
-  const [state, setState] = useState<Omit<RealGpsState, "retry">>({
-    lat: null,
-    lng: null,
-    accuracy: null,
-    status: "SEARCHING",
-    errorMessage: null,
-    lastUpdate: null,
-  });
 
-  const clearWatch = useCallback(() => {
-    if (watchIdRef.current !== null && "geolocation" in navigator) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
+  const retry = useCallback(() => {
+    setStatus("SEARCHING");
+    setErrorMessage(null);
+    setAttempt((a) => a + 1);
   }, []);
-
-  const handleSuccess = useCallback((position: GeolocationPosition) => {
-    setState({
-      lat: position.coords.latitude,
-      lng: position.coords.longitude,
-      accuracy: Math.round(position.coords.accuracy),
-      status: "LOCKED",
-      errorMessage: null,
-      lastUpdate: Date.now(),
-    });
-  }, []);
-
-  const handleError = useCallback((err: GeolocationPositionError) => {
-    const detail = err.message ? ` (${err.message})` : "";
-    if (err.code === err.PERMISSION_DENIED) {
-      setState((prev) => ({
-        ...prev,
-        status: "DENIED",
-        errorMessage: `GPS negato [code ${err.code}]${detail}. Tocca RIPROVA.`,
-      }));
-    } else {
-      setState((prev) => ({
-        ...prev,
-        status: "ERROR",
-        errorMessage: `GPS non agganciato [code ${err.code}]${detail}. Tocca RIPROVA.`,
-      }));
-    }
-  }, []);
-
-  const startTracking = useCallback(() => {
-    if (!("geolocation" in navigator)) {
-      setState((prev) => ({
-        ...prev,
-        status: "UNAVAILABLE",
-        errorMessage: "Browser non compatibile con il GPS.",
-      }));
-      return;
-    }
-
-    if (!window.isSecureContext) {
-      setState((prev) => ({
-        ...prev,
-        status: "ERROR",
-        errorMessage: "GPS bloccato in HTTP: apri il link HTTPS di Vercel.",
-      }));
-      return;
-    }
-
-    clearWatch();
-    setState((prev) => ({ ...prev, status: "SEARCHING", errorMessage: null }));
-
-    const highOpts: PositionOptions = {
-      enableHighAccuracy: true,
-      maximumAge: 5000,
-      timeout: 15000,
-    };
-
-    const lowOpts: PositionOptions = {
-      enableHighAccuracy: false,
-      maximumAge: 10000,
-      timeout: 20000,
-    };
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        handleSuccess(pos);
-        clearWatch();
-        watchIdRef.current = navigator.geolocation.watchPosition(
-          handleSuccess,
-          handleError,
-          highOpts,
-        );
-      },
-      (err) => {
-        if (err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE) {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              handleSuccess(pos);
-              clearWatch();
-              watchIdRef.current = navigator.geolocation.watchPosition(
-                handleSuccess,
-                handleError,
-                lowOpts,
-              );
-            },
-            handleError,
-            lowOpts,
-          );
-          return;
-        }
-        handleError(err);
-      },
-      highOpts,
-    );
-  }, [clearWatch, handleError, handleSuccess]);
 
   useEffect(() => {
-    if (!enabled) {
-      clearWatch();
+    if (!enabled) return;
+    if (!("geolocation" in navigator)) {
+      setStatus("ERROR");
+      setErrorMessage("GPS non supportato dal browser.");
       return;
     }
-    startTracking();
-    return clearWatch;
-  }, [enabled, startTracking, clearWatch]);
 
-  return { ...state, retry: startTracking };
+    setStatus("SEARCHING");
+    setErrorMessage(null);
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        setLat(pos.coords.latitude);
+        setLng(pos.coords.longitude);
+        setAccuracy(Math.round(pos.coords.accuracy));
+        if (
+          typeof pos.coords.heading === "number" &&
+          !Number.isNaN(pos.coords.heading)
+        ) {
+          setGpsHeading(Math.round(pos.coords.heading));
+        }
+        setStatus("LOCKED");
+        setErrorMessage(null);
+      },
+      (err) => {
+        setStatus("ERROR");
+        if (err.code === err.PERMISSION_DENIED) {
+          setErrorMessage(
+            "Permesso GPS negato. Attiva la posizione per Marsala Quest.",
+          );
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          setErrorMessage("Segnale GPS assente. Spostati all’aperto.");
+        } else {
+          setErrorMessage("Timeout GPS. Tocca RIPROVA.");
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 4000,
+        timeout: 15000,
+      },
+    );
+
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+  }, [enabled, attempt]);
+
+  // Bussola magnetica iOS/Android per cono visivo e Wayfinder anche da fermo
+  useEffect(() => {
+    if (!enabled) return;
+
+    const handleOrientation = (event: DeviceOrientationEvent) => {
+      const ev = event as DeviceOrientationEvent & {
+        webkitCompassHeading?: number;
+      };
+      if (
+        typeof ev.webkitCompassHeading === "number" &&
+        !Number.isNaN(ev.webkitCompassHeading)
+      ) {
+        setCompassHeading(Math.round(ev.webkitCompassHeading));
+      } else if (event.absolute && typeof event.alpha === "number") {
+        setCompassHeading(Math.round((360 - event.alpha) % 360));
+      }
+    };
+
+    window.addEventListener(
+      "deviceorientationabsolute",
+      handleOrientation as EventListener,
+    );
+    window.addEventListener("deviceorientation", handleOrientation);
+
+    return () => {
+      window.removeEventListener(
+        "deviceorientationabsolute",
+        handleOrientation as EventListener,
+      );
+      window.removeEventListener("deviceorientation", handleOrientation);
+    };
+  }, [enabled]);
+
+  return {
+    lat,
+    lng,
+    accuracy,
+    heading: compassHeading ?? gpsHeading,
+    status,
+    errorMessage,
+    retry,
+  };
 }
