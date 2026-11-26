@@ -265,6 +265,22 @@ function isValidMarsalaTile(z: number, x: number, y: number): boolean {
   );
 }
 
+function isValidImageBuffer(buf: Buffer): boolean {
+  if (buf.length < 100) return false;
+  const isPng =
+    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+  const isJpeg = buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+  return isPng || isJpeg;
+}
+
+function setTileHeaders(res: Response, contentType: string): void {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Cache-Control", "public, max-age=3600");
+}
+
 app.get("/api/map-tile/:z/:x/:yPng", async (req: Request, res: Response) => {
   const z = Number(req.params.z);
   const x = Number(req.params.x);
@@ -275,12 +291,10 @@ app.get("/api/map-tile/:z/:x/:yPng", async (req: Request, res: Response) => {
     return;
   }
 
-  const key = `osm-v3:${z}/${x}/${y}`;
+  const key = `osm-v4:${z}/${x}/${y}`;
   const cached = tileCache.get(key);
   if (cached) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Content-Type", cached.contentType);
-    res.setHeader("Cache-Control", "public, max-age=86400");
+    setTileHeaders(res, cached.contentType);
     res.send(cached.buf);
     return;
   }
@@ -288,6 +302,7 @@ app.get("/api/map-tile/:z/:x/:yPng", async (req: Request, res: Response) => {
   const sources = [
     `https://tile.openstreetmap.de/${z}/${x}/${y}.png`,
     `https://a.tile.openstreetmap.fr/osmfr/${z}/${x}/${y}.png`,
+    `https://b.tile.openstreetmap.fr/osmfr/${z}/${x}/${y}.png`,
     `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
     `https://tile.opentopomap.org/${z}/${x}/${y}.png`,
   ];
@@ -301,7 +316,7 @@ app.get("/api/map-tile/:z/:x/:yPng", async (req: Request, res: Response) => {
         headers: {
           "User-Agent":
             "MarsalaQuest8Bit/1.0 (https://marsala-quest-8bit.vercel.app)",
-          Accept: "image/png,image/*;q=0.9",
+          Accept: "image/png,image/jpeg,image/*;q=0.9",
         },
       });
       clearTimeout(timer);
@@ -312,7 +327,8 @@ app.get("/api/map-tile/:z/:x/:yPng", async (req: Request, res: Response) => {
 
       const arrBuf = await upstream.arrayBuffer();
       const buf = Buffer.from(arrBuf);
-      if (buf.length < 6500) continue;
+      // Accetta anche i tasselli di puro mare (PNG compresso da ~300-1500 byte) pur verificando l'header immagine
+      if (!isValidImageBuffer(buf)) continue;
 
       if (tileCache.size >= 500) {
         const firstKey = tileCache.keys().next().value;
@@ -320,9 +336,7 @@ app.get("/api/map-tile/:z/:x/:yPng", async (req: Request, res: Response) => {
       }
       tileCache.set(key, { buf, contentType });
 
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Content-Type", contentType);
-      res.setHeader("Cache-Control", "public, max-age=86400");
+      setTileHeaders(res, contentType);
       res.send(buf);
       return;
     } catch {

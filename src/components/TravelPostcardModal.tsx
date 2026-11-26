@@ -17,6 +17,7 @@ interface TravelPostcardModalProps {
 const API_BASE = (import.meta.env.VITE_API_URL || "")
   .trim()
   .replace(/\/+$/, "");
+const TILE_CACHE_VERSION = "osm4";
 
 function loadImage(
   src: string,
@@ -57,7 +58,8 @@ async function renderMarsalaRealMapSnapshot(
   canvas.height = height;
   const ctx = canvas.getContext("2d")!;
 
-  ctx.fillStyle = "#0b192c";
+  // Colore base mare OpenStreetMap per evitare sfondi scuri se un tassello d'acqua ritarda
+  ctx.fillStyle = "#aad3df";
   ctx.fillRect(0, 0, width, height);
 
   const lats = MARSALA_POIS.map((p) => p.lat);
@@ -83,7 +85,7 @@ async function renderMarsalaRealMapSnapshot(
     y: (latToTileY(lat, zoom) - topTy) * tilePxSize,
   });
 
-  // 1. Scarica e disegna tutti i tasselli OpenStreetMap di Marsala (con margine extra per coprire ogni bordo)
+  // 1. Scarica tutti i tasselli OpenStreetMap con query versionata (?v=osm4) per bypassare la cache vecchia di Safari
   const startTx = Math.floor(leftTx) - 1;
   const endTx = Math.ceil(rightTx) + 1;
   const startTy = Math.floor(topTy) - 1;
@@ -95,7 +97,7 @@ async function renderMarsalaRealMapSnapshot(
 
   for (let tx = startTx; tx <= endTx; tx++) {
     for (let ty = startTy; ty <= endTy; ty++) {
-      const tileUrl = `${API_BASE}/api/map-tile/${zoom}/${tx}/${ty}.png`;
+      const tileUrl = `${API_BASE}/api/map-tile/${zoom}/${tx}/${ty}.png?v=${TILE_CACHE_VERSION}`;
       tileJobs.push(
         loadImage(tileUrl, "anonymous")
           .then((img) => ({ img, tx, ty }))
@@ -106,15 +108,12 @@ async function renderMarsalaRealMapSnapshot(
 
   const tiles = await Promise.all(tileJobs);
 
-  ctx.save();
-  ctx.filter = "saturate(1.22) contrast(1.06)";
   for (const t of tiles) {
     if (!t) continue;
     const dx = (t.tx - leftTx) * tilePxSize;
     const dy = (t.ty - topTy) * tilePxSize;
     ctx.drawImage(t.img, dx, dy, tilePxSize + 1, tilePxSize + 1);
   }
-  ctx.restore();
 
   // 2. Applica il Puzzle Voronoi: tessere sbloccate a colori, tessere mancanti in grigio
   const unlockedCount = Object.keys(unlocks).length;

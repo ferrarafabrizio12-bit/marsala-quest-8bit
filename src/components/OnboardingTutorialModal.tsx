@@ -81,6 +81,32 @@ const STEPS: TutorialStep[] = [
     ],
     accentColor: "#ffd166",
   },
+  {
+    badge: "STEP 5 • FEEDBACK & ABOUT ME",
+    icon: "💬",
+    title: "SEGNALA BUG, IDEE & CONTATTI",
+    subtitle:
+      "Nella barra in alto trovi il pulsante ℹ️: il tuo filo diretto con lo sviluppatore di Marsala Quest 8-Bit.",
+    bullets: [
+      "Scheda 💬 FEEDBACK: segnala bug, nuovi luoghi o idee (in privato, 1 invio ogni 12 ore).",
+      "Scheda 👨‍💻 ABOUT ME: scopri chi ha creato l’app, l’obiettivo del progetto e i link Instagram/GitHub.",
+      "Dalla stessa finestra puoi riaprire questo tutorial in qualsiasi momento.",
+    ],
+    accentColor: "#38e54d",
+  },
+  {
+    badge: "STEP 6 • INSTALLA COME APP",
+    icon: "📲",
+    title: "METTILA NELLA SCHERMATA HOME",
+    subtitle:
+      "Puoi salvare Marsala Quest 8-Bit sul telefono per aprirla a tutto schermo con la sua icona, come una vera app!",
+    bullets: [
+      'iPhone (Safari): tocca l’icona Condividi in basso (quadrato con freccia ↑), scorri e scegli "Aggiungi alla schermata Home", poi "Aggiungi".',
+      'Android (Chrome): tocca il menu ⋮ in alto a destra e seleziona "Aggiungi a schermata Home" (o "Installa app").',
+      "Avviandola dalla Home avrai più spazio per la mappa e accesso immediato in giro per Marsala!",
+    ],
+    accentColor: "#4cc9f0",
+  },
 ];
 
 export const OnboardingTutorialModal: React.FC<
@@ -159,7 +185,7 @@ export const OnboardingTutorialModal: React.FC<
         </div>
 
         {/* Indicatori progresso step */}
-        <div className="flex items-center justify-center gap-2 mb-4">
+        <div className="flex items-center justify-center gap-1.5 mb-4">
           {STEPS.map((s, idx) => (
             <button
               key={s.badge}
