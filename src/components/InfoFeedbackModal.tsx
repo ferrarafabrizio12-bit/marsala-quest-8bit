@@ -4,8 +4,8 @@ import type { FeedbackCategory, FeedbackItem } from "../types/game";
 import { sound8bit } from "../utils/sound8bit";
 
 // >>> INSERISCI QUI I TUOI LINK SOCIAL REALI <<<
-const INSTAGRAM_URL = "https://instagram.com/tuo_username_instagram";
-const GITHUB_URL = "https://github.com/tuo_username_github";
+const INSTAGRAM_URL = "https://www.instagram.com/_fabrif_/";
+const GITHUB_URL = "https://github.com/ferrarafabrizio12-bit";
 
 interface InfoFeedbackModalProps {
   isSuperuser?: boolean;
