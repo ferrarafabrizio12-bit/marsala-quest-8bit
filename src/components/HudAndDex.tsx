@@ -211,7 +211,7 @@ export const HudBar: React.FC<HudBarProps> = ({
         <button
           type="button"
           onClick={() => {
-            sound8bit.click();
+            sound8bit.back();
             onToggleOnlyMissing();
           }}
           className="pointer-events-auto px-2.5 py-1 border-[2px] bg-[#141b33]/95 border-[#ffd166] flex items-center justify-between gap-2 text-left shadow-[2px_2px_0_#000]"
@@ -293,7 +293,10 @@ export const BottomDock: React.FC<BottomDockProps> = ({
           <div className="flex gap-1.5">
             <button
               onClick={() => {
-                sound8bit.victoryMedal();
+                sound8bit.prime();
+                if (isSuperuser) sound8bit.creatorSupreme();
+                else if (isMaxPrestigeDone) sound8bit.immortalPrestige5();
+                else sound8bit.victoryMedal();
                 onOpenMedal();
               }}
               className={`nes-btn flex-1 py-2 text-[8px] ${
@@ -314,6 +317,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
             {canActivatePrestige && (
               <button
                 onClick={() => {
+                  sound8bit.prime();
                   sound8bit.easterEgg();
                   onOpenPrestigeConfirm();
                 }}
@@ -519,7 +523,7 @@ export const DexModal: React.FC<DexModalProps> = ({
             </button>
             <button
               onClick={() => {
-                sound8bit.click();
+                sound8bit.prime();
                 onClose();
                 onOpenPostcard();
               }}
@@ -546,7 +550,7 @@ export const DexModal: React.FC<DexModalProps> = ({
                   disabled={busyId !== null}
                   onClick={async () => {
                     if (!onUnlockAllPois) return;
-                    sound8bit.click();
+                    sound8bit.prime();
                     setBusyId("all-pois");
                     try {
                       await onUnlockAllPois();
@@ -565,7 +569,7 @@ export const DexModal: React.FC<DexModalProps> = ({
                   disabled={busyId !== null}
                   onClick={async () => {
                     if (!onLockAllPois) return;
-                    sound8bit.click();
+                    sound8bit.prime();
                     setBusyId("lock-all-pois");
                     try {
                       await onLockAllPois();
@@ -726,7 +730,7 @@ export const DexModal: React.FC<DexModalProps> = ({
                             disabled={busyId === poi.id}
                             onClick={async () => {
                               if (!onLockPoi) return;
-                              sound8bit.click();
+                              sound8bit.prime();
                               setBusyId(poi.id);
                               try {
                                 await onLockPoi(poi.id);
@@ -746,7 +750,7 @@ export const DexModal: React.FC<DexModalProps> = ({
                             disabled={busyId === poi.id}
                             onClick={async () => {
                               if (!onQuickUnlockPoi) return;
-                              sound8bit.click();
+                              sound8bit.prime();
                               setBusyId(poi.id);
                               try {
                                 await onQuickUnlockPoi(poi);
@@ -776,7 +780,7 @@ export const DexModal: React.FC<DexModalProps> = ({
                   type="button"
                   disabled={busyId !== null}
                   onClick={async () => {
-                    sound8bit.click();
+                    sound8bit.prime();
                     setBusyId("all-eggs");
                     try {
                       await onAdminEasterEgg("unlock_all");
@@ -794,7 +798,7 @@ export const DexModal: React.FC<DexModalProps> = ({
                   type="button"
                   disabled={busyId !== null}
                   onClick={async () => {
-                    sound8bit.click();
+                    sound8bit.prime();
                     setBusyId("lock-all-eggs");
                     try {
                       await onAdminEasterEgg("lock_all");
@@ -838,7 +842,7 @@ export const DexModal: React.FC<DexModalProps> = ({
                             type="button"
                             disabled={busyId === egg.id}
                             onClick={async () => {
-                              sound8bit.click();
+                              sound8bit.prime();
                               setBusyId(egg.id);
                               try {
                                 await onAdminEasterEgg(

@@ -115,7 +115,6 @@ function drawPixelDiamond(
   ctx.lineWidth = 5;
   ctx.stroke();
 
-  // Riflesso interno
   ctx.beginPath();
   ctx.moveTo(cx, cy - size * 0.62);
   ctx.lineTo(cx + size * 0.45, cy);
@@ -168,7 +167,6 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
       const isCreator = variant === "creator";
       const isImmortal = variant === "immortal";
 
-      // 1. Sfondo
       const bgGrad = ctx.createLinearGradient(0, 0, W, H);
       if (isCreator) {
         bgGrad.addColorStop(0, "#07070d");
@@ -186,7 +184,6 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, W, H);
 
-      // Griglia pixel retrò
       ctx.strokeStyle = isCreator
         ? "rgba(255, 0, 84, 0.11)"
         : isImmortal
@@ -206,7 +203,6 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
         ctx.stroke();
       }
 
-      // 2. Cornice doppia 8-bit
       const outerStroke = isCreator
         ? "#ffd166"
         : isImmortal
@@ -228,7 +224,6 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
       ctx.lineWidth = 6;
       ctx.strokeRect(42, 42, W - 84, H - 84);
 
-      // 3. Intestazione
       ctx.textAlign = "center";
       ctx.fillStyle = isCreator
         ? "#ff0054"
@@ -260,7 +255,6 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
         160,
       );
 
-      // 4. Nastro della medaglia
       const ribbonY = 196;
       const ribbonH = 175;
       const ribbonW = 190;
@@ -290,17 +284,14 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
       ctx.lineWidth = 6;
       ctx.strokeRect(rx, ribbonY, ribbonW, ribbonH);
 
-      // Fibbia metallica
       ctx.fillStyle = "#ffd166";
       ctx.fillRect(rx - 14, ribbonY + ribbonH - 18, ribbonW + 28, 28);
       ctx.strokeRect(rx - 14, ribbonY + ribbonH - 18, ribbonW + 28, 28);
 
-      // 5. Corpo centrale della Medaglia
       const cx = W / 2;
       const cy = 505;
       const outerR = 178;
 
-      // Aura luminosa dietro la medaglia
       const glow = ctx.createRadialGradient(cx, cy, 40, cx, cy, 245);
       if (isCreator) {
         glow.addColorStop(0, "rgba(255, 0, 84, 0.55)");
@@ -319,9 +310,7 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
       ctx.arc(cx, cy, 245, 0, Math.PI * 2);
       ctx.fill();
 
-      // Anello esterno ottagonale/circolare
       if (isCreator) {
-        // Ottagono regale ossidiana & oro per il Creatore
         ctx.beginPath();
         for (let i = 0; i < 8; i++) {
           const angle = (Math.PI / 4) * i - Math.PI / 8;
@@ -346,7 +335,6 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
         ctx.lineWidth = 8;
         ctx.stroke();
 
-        // Disco interno ossidiana
         ctx.beginPath();
         ctx.arc(cx, cy, outerR - 22, 0, Math.PI * 2);
         ctx.fillStyle = "#090d16";
@@ -355,14 +343,12 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
         ctx.lineWidth = 6;
         ctx.stroke();
 
-        // Anello cremisi
         ctx.beginPath();
         ctx.arc(cx, cy, outerR - 44, 0, Math.PI * 2);
         ctx.strokeStyle = "#ff0054";
         ctx.lineWidth = 5;
         ctx.stroke();
 
-        // Corona pixelata in cima + fulmine centrale
         ctx.fillStyle = "#ffd166";
         ctx.fillRect(cx - 42, cy - 112, 84, 18);
         ctx.fillRect(cx - 42, cy - 128, 16, 16);
@@ -373,11 +359,9 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
 
         drawPixelLightning(ctx, cx, cy + 16, 2.1);
 
-        // Stelle laterali cremisi/oro
         drawPixelStar(ctx, cx - 102, cy, 18, 8, "#ffd166");
         drawPixelStar(ctx, cx + 102, cy, 18, 8, "#ffd166");
       } else if (isImmortal) {
-        // Disco esterno Platino-Diamante
         const platGrad = ctx.createLinearGradient(
           cx - outerR,
           cy - outerR,
@@ -396,7 +380,6 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
         ctx.lineWidth = 8;
         ctx.stroke();
 
-        // Disco interno blu notte imperiale
         ctx.beginPath();
         ctx.arc(cx, cy, outerR - 26, 0, Math.PI * 2);
         ctx.fillStyle = "#0c1f3a";
@@ -405,10 +388,8 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
         ctx.lineWidth = 6;
         ctx.stroke();
 
-        // Diamante centrale
         drawPixelDiamond(ctx, cx, cy + 6, 78);
 
-        // 5 stelle ad arco (Prestigio ★1 .. ★5)
         for (let i = 0; i < MAX_PRESTIGE; i++) {
           const t = (i - 2) * 0.36;
           const sx = cx + Math.sin(t) * 118;
@@ -416,7 +397,6 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
           drawPixelStar(ctx, sx, sy, 18, 8, "#ffd166");
         }
       } else {
-        // Medaglia Classica / Prestigio 1-4
         const goldGrad = ctx.createLinearGradient(
           cx - outerR,
           cy - outerR,
@@ -450,7 +430,6 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
 
         drawPixelStar(ctx, cx, cy - 8, 72, 32, "#ffd166");
 
-        // Stelle Prestigio raggiunte
         const stars = Math.min(prestige, MAX_PRESTIGE);
         for (let i = 0; i < stars; i++) {
           const offset = (i - (stars - 1) / 2) * 44;
@@ -458,7 +437,6 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
         }
       }
 
-      // Cartiglio sotto la medaglia
       const bannerW = 680;
       const bannerH = 60;
       const bx = (W - bannerW) / 2;
@@ -487,7 +465,6 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
         by + 39,
       );
 
-      // 6. Box Giocatore con Avatar Pixel Art
       const cardX = 76;
       const cardY = 812;
       const cardW = W - 152;
@@ -547,7 +524,6 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
         cardY + 224,
       );
 
-      // Footer data
       ctx.textAlign = "center";
       ctx.fillStyle = "#94a3b8";
       ctx.font = "22px monospace";
@@ -579,7 +555,8 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
 
   const handleSaveOrShare = async () => {
     if (!medalUrl) return;
-    sound8bit.click();
+    sound8bit.prime();
+    sound8bit.postcardPrint();
     setSharing(true);
     try {
       const label =
@@ -624,7 +601,7 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                sound8bit.click();
+                sound8bit.creatorSupreme();
                 setVariant("creator");
               }}
               className={`nes-btn py-1.5 text-[7px] ${
@@ -638,7 +615,7 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                sound8bit.click();
+                sound8bit.immortalPrestige5();
                 setVariant("immortal");
               }}
               className={`nes-btn py-1.5 text-[7px] ${
@@ -652,7 +629,7 @@ export const LilibeoMedalModal: React.FC<LilibeoMedalModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                sound8bit.click();
+                sound8bit.victoryMedal();
                 setVariant("standard");
               }}
               className={`nes-btn py-1.5 text-[7px] ${

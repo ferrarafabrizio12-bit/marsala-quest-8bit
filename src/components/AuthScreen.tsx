@@ -70,7 +70,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
   };
 
   const handleGenderChange = (nextGender: AvatarGender) => {
-    sound8bit.click();
+    sound8bit.equipItem();
     setGender(nextGender);
     if (nextGender === "female") {
       setBeard("none");
@@ -81,7 +81,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
   };
 
   const handleNextRegisterStep = () => {
-    sound8bit.click();
+    sound8bit.prime();
     const cleanUser = username.trim();
     const cleanNick = nickname.trim();
 
@@ -90,20 +90,24 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
       cleanUser.length > 30 ||
       !USERNAME_REGEX.test(cleanUser)
     ) {
+      sound8bit.error();
       setError(
         "Username tra 3 e 30 caratteri (solo lettere, numeri, punti, _ o -).",
       );
       return;
     }
     if (cleanNick.length < 2 || cleanNick.length > 20) {
+      sound8bit.error();
       setError("Nickname tra 2 e 20 caratteri.");
       return;
     }
     if (password.length < 6 || password.length > 100) {
+      sound8bit.error();
       setError("Password minimo 6 caratteri.");
       return;
     }
 
+    sound8bit.tutorialStep();
     setError(null);
     setRegisterStep(2);
     scrollToTop();
@@ -111,6 +115,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    sound8bit.prime();
 
     if (mode === "register" && registerStep === 1) {
       handleNextRegisterStep();
@@ -135,9 +140,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
               hairStyle,
               beard: gender === "male" ? beard : "none",
             });
+
+      if (mode === "login") {
+        if (res.user.isSuperuser) sound8bit.creatorSupreme();
+        else sound8bit.loginSuccess();
+      } else {
+        sound8bit.newPlayer();
+      }
+
       setStoredToken(res.token);
       onAuthenticated(res.user);
     } catch (err) {
+      sound8bit.error();
       const msg =
         err instanceof Error ? err.message : "Errore di autenticazione.";
       setError(msg);
@@ -202,13 +216,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
             </button>
           </div>
 
-          {/* Indicatore step solo durante la registrazione */}
           {mode === "register" && (
             <div className="grid grid-cols-2 gap-1.5 mb-3">
               <button
                 type="button"
                 onClick={() => {
-                  sound8bit.click();
+                  sound8bit.back();
                   setRegisterStep(1);
                   setError(null);
                   scrollToTop();
@@ -238,7 +251,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
           )}
 
           <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
-            {/* LOGIN oppure REGISTRAZIONE STEP 1 (Dati account) */}
             {(mode === "login" || registerStep === 1) && (
               <>
                 <div>
@@ -341,7 +353,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
               </>
             )}
 
-            {/* REGISTRAZIONE STEP 2 (Personalizzazione Avatar) */}
             {mode === "register" && registerStep === 2 && (
               <div className="bg-[#090d18] border-[3px] border-[#4cc9f0] p-3 space-y-2.5">
                 <div className="flex items-center gap-3">
@@ -379,7 +390,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                   </div>
                 </div>
 
-                {/* Colore pelle */}
                 <div>
                   <p className="font-pixel text-[7px] text-[#cbd5e1] mb-1">
                     CARNAGIONE:
@@ -390,7 +400,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                         key={tone.id}
                         type="button"
                         onClick={() => {
-                          sound8bit.click();
+                          sound8bit.equipItem();
                           setSkinTone(tone.id);
                         }}
                         className={`border-2 py-1 px-1 flex flex-col items-center gap-1 transition ${
@@ -411,7 +421,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                   </div>
                 </div>
 
-                {/* Colore capelli */}
                 <div>
                   <p className="font-pixel text-[7px] text-[#cbd5e1] mb-1">
                     COLORE CAPELLI:
@@ -422,7 +431,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                         key={hc.id}
                         type="button"
                         onClick={() => {
-                          sound8bit.click();
+                          sound8bit.equipItem();
                           setHairColor(hc.id);
                         }}
                         className={`border-2 py-1 px-0.5 flex flex-col items-center gap-1 transition ${
@@ -443,7 +452,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                   </div>
                 </div>
 
-                {/* Taglio capelli */}
                 <div>
                   <p className="font-pixel text-[7px] text-[#cbd5e1] mb-1">
                     STILE CAPELLI:
@@ -454,7 +462,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                         key={hs.id}
                         type="button"
                         onClick={() => {
-                          sound8bit.click();
+                          sound8bit.equipItem();
                           setHairStyle(hs.id);
                         }}
                         className={`nes-btn py-1.5 text-[6px] sm:text-[7px] ${
@@ -469,7 +477,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                   </div>
                 </div>
 
-                {/* Stile barba (solo profilo maschile) */}
                 {gender === "male" && (
                   <div>
                     <p className="font-pixel text-[7px] text-[#cbd5e1] mb-1">
@@ -481,7 +488,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                           key={bs.id}
                           type="button"
                           onClick={() => {
-                            sound8bit.click();
+                            sound8bit.equipItem();
                             setBeard(bs.id);
                           }}
                           className={`nes-btn py-1.5 text-[6px] sm:text-[7px] ${
@@ -505,7 +512,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
               </div>
             )}
 
-            {/* Pulsanti azione in base a Login / Step 1 / Step 2 */}
             {mode === "login" ? (
               <button
                 type="submit"
@@ -527,7 +533,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                   type="button"
                   disabled={loading}
                   onClick={() => {
-                    sound8bit.click();
+                    sound8bit.back();
                     setError(null);
                     setRegisterStep(1);
                     scrollToTop();

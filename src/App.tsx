@@ -211,6 +211,7 @@ export default function App() {
   const triggerEasterEgg = useCallback(
     async (eggId: string) => {
       if (!user) return;
+      sound8bit.prime();
       sound8bit.easterEgg();
       try {
         const res = await api.claimEasterEgg(eggId);
@@ -223,6 +224,9 @@ export default function App() {
               c.requirement.type === "easter_egg" &&
               c.requirement.eggId === eggId,
           );
+          if (res.isNew && rewardItems.length > 0) {
+            setTimeout(() => sound8bit.claimReward(), 520);
+          }
           const rewardSuffix =
             res.isNew && rewardItems.length > 0
               ? ` • 👕 Sbloccato in LOOK: ${rewardItems.map((r) => r.name).join(" + ")}!`
@@ -262,7 +266,10 @@ export default function App() {
     const next = !muted;
     sound8bit.muted = next;
     setMuted(next);
-    if (!next) sound8bit.click();
+    if (!next) {
+      sound8bit.prime();
+      sound8bit.click();
+    }
   };
 
   const handleToggleCrt = () => {
@@ -271,6 +278,7 @@ export default function App() {
   };
 
   const handleTitleTap = () => {
+    sound8bit.prime();
     titleTapsRef.current += 1;
     if (titleTapsRef.current >= 7) {
       titleTapsRef.current = 0;
@@ -299,6 +307,7 @@ export default function App() {
   };
 
   const handleFitMarsalaTap = () => {
+    sound8bit.prime();
     fitMapTapsRef.current += 1;
     if (fitMapTapsRef.current >= 5) {
       fitMapTapsRef.current = 0;
@@ -338,15 +347,19 @@ export default function App() {
   };
 
   const handleSaveAvatar = async (nextAvatar: AvatarConfig) => {
+    sound8bit.prime();
     const res = await api.updateAvatar(nextAvatar);
     setUser((prev) => (prev ? { ...prev, avatar: res.avatar } : prev));
+    sound8bit.claimReward();
     showToast("👕 Nuovo look salvato su mappa e classifica!");
   };
 
   const handleSaveTitle = async (nextTitleId: string) => {
+    sound8bit.prime();
     const res = await api.updateTitle(nextTitleId);
     const titleObj = getTitleById(res.title);
     setUser((prev) => (prev ? { ...prev, title: res.title } : prev));
+    sound8bit.claimReward();
     showToast(`🏷️ Titolo equipaggiato: ${titleObj.icon} ${titleObj.label}`);
   };
 
@@ -355,16 +368,26 @@ export default function App() {
     nextAvatar: AvatarConfig,
     nextTitle: string,
   ) => {
+    sound8bit.prime();
     const res = await api.updateSuperuserOverrides({
       overrides: nextOverrides,
       avatar: nextAvatar,
       title: nextTitle,
     });
     setUser(res.user);
+    const wearingCreatorItem =
+      nextTitle === "title-creator-su" ||
+      nextAvatar.hat === "hat-su-crown" ||
+      nextAvatar.glasses === "glasses-su-matrix" ||
+      nextAvatar.top === "top-su-architect" ||
+      nextAvatar.bottom === "bottom-su-architect";
+    if (wearingCreatorItem) sound8bit.creatorSupreme();
+    else sound8bit.claimReward();
     showToast("⚡ Look, titoli e permessi Superuser aggiornati!");
   };
 
   const handleConfirmPrestige = async () => {
+    sound8bit.prime();
     if (!user || user.prestige >= MAX_PRESTIGE) {
       setShowPrestigeConfirm(false);
       return;
@@ -386,13 +409,14 @@ export default function App() {
       setNavTargetPoi(null);
       setWalkingRoute(null);
       setShowPrestigeConfirm(false);
-      sound8bit.victoryMedal();
+      sound8bit.prestigeActivate();
       showToast(
         res.user.prestige >= MAX_PRESTIGE
           ? `⚜️ PRESTIGIO FINALE ★${MAX_PRESTIGE}/${MAX_PRESTIGE} ATTIVATO! Completa 20/20 per le ricompense Immortale!`
           : `⚡ PRESTIGIO ★${res.user.prestige}/${MAX_PRESTIGE} ATTIVATO! Card Olografiche & nuovi capi in LOOK!`,
       );
     } catch (err) {
+      sound8bit.error();
       showToast(
         err instanceof Error ? err.message : "Errore attivazione Prestigio.",
       );
@@ -404,6 +428,8 @@ export default function App() {
   const handleUnlockSubmit = async (photoDataUrl: string) => {
     if (!selectedPoi || !user) return;
     if (!user.isSuperuser && (gps.lat === null || gps.lng === null)) return;
+    sound8bit.prime();
+
     const prevCount = Object.keys(unlocks).length;
     const res = await api.unlockPoi({
       poiId: selectedPoi.id,
@@ -437,7 +463,6 @@ export default function App() {
     }
     setSelectedPoi(null);
 
-    sound8bit.syncViewpoint();
     setJustSyncedPoiId(selectedPoi.id);
 
     const cardCosmetic =
@@ -450,14 +475,17 @@ export default function App() {
         : undefined;
 
     if (justHitMaxPrestige) {
+      sound8bit.immortalPrestige5();
       showToast(
         `⚜️ PRESTIGIO ★${MAX_PRESTIGE} COMPLETATO! Sbloccati: Immortale di Lilibeo ★5, Manto Imperiale ★5 e Medaglia ★5!`,
       );
     } else if (res.bountyClaimedNow) {
+      sound8bit.bountyClaimed();
       showToast(
         `🎯 OBIETTIVO DEL GIORNO COMPLETATO (+${res.bountyXpAwarded} XP • Streak 🔥${res.user.bountyStreak}d)!`,
       );
     } else if (res.editionBonusXp > 0) {
+      sound8bit.specialEdition();
       const edLabel =
         res.unlock.edition === "golden_hour"
           ? "🌅 GOLDEN HOUR"
@@ -466,14 +494,20 @@ export default function App() {
         `${edLabel} SBLOCCATA: ${selectedPoi.name} (+${res.editionBonusXp} XP bonus)!`,
       );
     } else if (cardCosmetic) {
+      sound8bit.syncViewpoint();
+      setTimeout(() => sound8bit.claimReward(), 850);
       showToast(
         `★ ZONA COLORATA: ${selectedPoi.name} • 👕 Sbloccato: ${cardCosmetic.name}!`,
       );
-    } else {
+    } else if (res.unlock.isHolo) {
+      sound8bit.holoCard();
       showToast(
-        res.unlock.isHolo
-          ? `✦ CARD HOLO: ${selectedPoi.name} (+${res.unlock.xpEarned} XP)`
-          : `★ ZONA COLORATA: ${selectedPoi.name} (+${res.unlock.xpEarned} XP)`,
+        `✦ CARD HOLO: ${selectedPoi.name} (+${res.unlock.xpEarned} XP)`,
+      );
+    } else {
+      sound8bit.syncViewpoint();
+      showToast(
+        `★ ZONA COLORATA: ${selectedPoi.name} (+${res.unlock.xpEarned} XP)`,
       );
     }
 
@@ -496,7 +530,8 @@ export default function App() {
 
     if (nextCount >= MARSALA_POIS.length) {
       setTimeout(() => {
-        sound8bit.victoryMedal();
+        if (justHitMaxPrestige) sound8bit.claimReward();
+        else sound8bit.victoryMedal();
         setShowMedal(true);
       }, 2200);
     }
@@ -504,6 +539,8 @@ export default function App() {
 
   const handleQuickUnlockPoi = async (poi: PoiDefinition) => {
     if (!user) return;
+    sound8bit.prime();
+    const prevCount = Object.keys(unlocks).length;
     const res = await api.unlockPoi({
       poiId: poi.id,
       lat: gps.lat,
@@ -512,57 +549,78 @@ export default function App() {
       photoDataUrl: "",
       requestedEdition: theme,
     });
+    const nextUnlocks = { ...unlocks, [poi.id]: res.unlock };
+    const nextCount = Object.keys(nextUnlocks).length;
+
     setUser(res.user);
-    setUnlocks((prev) => ({ ...prev, [poi.id]: res.unlock }));
+    setUnlocks(nextUnlocks);
     setEasterEggs(res.easterEggs);
     setDailyBounty(res.dailyBounty);
     setTotalXp(res.totalXp);
-    sound8bit.syncViewpoint();
+
+    if (
+      prevCount < MARSALA_POIS.length &&
+      hasCompletedMaxPrestige(res.user.prestige, nextCount)
+    ) {
+      sound8bit.immortalPrestige5();
+    } else if (res.bountyClaimedNow) {
+      sound8bit.bountyClaimed();
+    } else if (res.editionBonusXp > 0) {
+      sound8bit.specialEdition();
+    } else if (res.unlock.isHolo) {
+      sound8bit.holoCard();
+    } else {
+      sound8bit.syncViewpoint();
+    }
     showToast(`⚡ Sbloccato: ${poi.name}`);
   };
 
   const handleLockPoi = async (poiId: string) => {
+    sound8bit.prime();
     const res = await api.lockPoi({ poiId });
     setUser(res.user);
     setUnlocks(res.unlocks);
     setEasterEggs(res.easterEggs);
     setDailyBounty(res.dailyBounty);
     setTotalXp(res.totalXp);
-    sound8bit.click();
+    sound8bit.back();
     const poiName = MARSALA_POIS.find((p) => p.id === poiId)?.name || poiId;
     showToast(`🔒 Card & territorio ribloccati: ${poiName}`);
   };
 
   const handleUnlockAllPois = async () => {
+    sound8bit.prime();
     const res = await api.unlockAllPois();
     setUser(res.user);
     setUnlocks(res.unlocks);
     setEasterEggs(res.easterEggs);
     setDailyBounty(res.dailyBounty);
     setTotalXp(res.totalXp);
-    sound8bit.victoryMedal();
     if (
       hasCompletedMaxPrestige(
         res.user.prestige,
         Object.keys(res.unlocks).length,
       )
     ) {
+      sound8bit.immortalPrestige5();
       showToast(
         `⚜️ 20/20 AL PRESTIGIO ★${MAX_PRESTIGE}! Sbloccati Manto Imperiale ★5, titolo e Medaglia ★5!`,
       );
     } else {
+      sound8bit.victoryMedal();
       showToast("⚡ Tutti i 20 luoghi di Marsala sbloccati!");
     }
   };
 
   const handleLockAllPois = async () => {
+    sound8bit.prime();
     const res = await api.lockPoi({ all: true });
     setUser(res.user);
     setUnlocks(res.unlocks);
     setEasterEggs(res.easterEggs);
     setDailyBounty(res.dailyBounty);
     setTotalXp(res.totalXp);
-    sound8bit.click();
+    sound8bit.back();
     showToast("🔒 Mappa completamente resettata (0/20)!");
   };
 
@@ -570,6 +628,7 @@ export default function App() {
     action: "unlock" | "lock" | "unlock_all" | "lock_all",
     eggId?: string,
   ) => {
+    sound8bit.prime();
     const res = await api.adminEasterEgg({ action, eggId });
     setEasterEggs(res.easterEggs);
     setTotalXp(res.totalXp);
@@ -581,7 +640,7 @@ export default function App() {
           : "🔓 Segreto sbloccato!",
       );
     } else {
-      sound8bit.click();
+      sound8bit.back();
       showToast(
         action === "lock_all"
           ? "🔒 Tutti i segreti ribloccati!"
@@ -591,17 +650,19 @@ export default function App() {
   };
 
   const handleOpenLeaderboard = async () => {
+    sound8bit.prime();
     try {
       const data = await api.getLeaderboard();
       setLeaderboard(data.leaderboard);
       setShowLeaderboard(true);
     } catch {
+      sound8bit.error();
       showToast("Impossibile caricare gli High Scores.");
     }
   };
 
   const handleLogout = () => {
-    sound8bit.click();
+    sound8bit.logout();
     setStoredToken(null);
     setUser(null);
     setUnlocks({});
@@ -699,6 +760,7 @@ export default function App() {
               prestige={user.prestige}
               onOpenPoi={(poi) => setSelectedPoi(poi)}
               onClearTarget={() => {
+                sound8bit.back();
                 setNavTargetPoi(null);
                 setWalkingRoute(null);
               }}
@@ -778,7 +840,10 @@ export default function App() {
               risveglierà tutti i colori di Lilibeo, {user.nickname}.&raquo;
             </p>
             <button
-              onClick={() => setSibillaDialog(false)}
+              onClick={() => {
+                sound8bit.click();
+                setSibillaDialog(false);
+              }}
               className="nes-btn px-5 py-2.5 bg-[#ffd166] text-black text-[10px]"
             >
               PROSEGUI
@@ -815,7 +880,10 @@ export default function App() {
               <button
                 type="button"
                 disabled={activatingPrestige}
-                onClick={() => setShowPrestigeConfirm(false)}
+                onClick={() => {
+                  sound8bit.back();
+                  setShowPrestigeConfirm(false);
+                }}
                 className="nes-btn py-2.5 bg-[#26335c] text-white text-[9px]"
               >
                 ANNULLA
@@ -847,8 +915,12 @@ export default function App() {
           bountyBonusXp={dailyBounty.bonusXp}
           gps={gps}
           existingUnlock={unlocks[selectedPoi.id]}
-          onClose={() => setSelectedPoi(null)}
+          onClose={() => {
+            sound8bit.back();
+            setSelectedPoi(null);
+          }}
           onTrackWithCompass={(poi) => {
+            sound8bit.navStart();
             void gps.requestCompassPermission();
             setNavTargetPoi(poi);
             setSelectedPoi(null);
@@ -874,7 +946,10 @@ export default function App() {
           onSave={handleSaveAvatar}
           onSaveTitle={handleSaveTitle}
           onSaveSuperuserOverrides={handleSaveSuperuserOverrides}
-          onClose={() => setShowWardrobe(false)}
+          onClose={() => {
+            sound8bit.back();
+            setShowWardrobe(false);
+          }}
         />
       )}
 
@@ -896,10 +971,16 @@ export default function App() {
           onUnlockAllPois={handleUnlockAllPois}
           onLockAllPois={handleLockAllPois}
           onAdminEasterEgg={handleAdminEasterEgg}
-          onOpenPostcard={() => setShowPostcard(true)}
+          onOpenPostcard={() => {
+            sound8bit.postcardPrint();
+            setShowPostcard(true);
+          }}
           onTrigger1860={handleTrigger1860}
           onTriggerPunic={handleTriggerPunic}
-          onClose={() => setShowDex(false)}
+          onClose={() => {
+            sound8bit.back();
+            setShowDex(false);
+          }}
         />
       )}
 
@@ -909,7 +990,10 @@ export default function App() {
           unlocks={unlocks}
           easterEggsCount={easterEggs.length}
           totalXp={totalXp}
-          onClose={() => setShowPostcard(false)}
+          onClose={() => {
+            sound8bit.back();
+            setShowPostcard(false);
+          }}
         />
       )}
 
@@ -917,7 +1001,10 @@ export default function App() {
         <LeaderboardModal
           entries={leaderboard}
           currentNickname={user.nickname}
-          onClose={() => setShowLeaderboard(false)}
+          onClose={() => {
+            sound8bit.back();
+            setShowLeaderboard(false);
+          }}
         />
       )}
 
@@ -931,7 +1018,10 @@ export default function App() {
           isSuperuser={Boolean(user.isSuperuser)}
           avatar={user.avatar}
           titleId={user.title}
-          onClose={() => setShowMedal(false)}
+          onClose={() => {
+            sound8bit.back();
+            setShowMedal(false);
+          }}
         />
       )}
 
@@ -939,7 +1029,10 @@ export default function App() {
         <InfoFeedbackModal
           isSuperuser={Boolean(user.isSuperuser)}
           onOpenTutorial={() => setShowTutorial(true)}
-          onClose={() => setShowInfoModal(false)}
+          onClose={() => {
+            sound8bit.back();
+            setShowInfoModal(false);
+          }}
         />
       )}
 

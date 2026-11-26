@@ -75,9 +75,9 @@ const STEPS: TutorialStep[] = [
     subtitle:
       "Ogni traguardo sblocca nuovi accessori per il tuo esploratore e ricordi speciali da portare con te.",
     bullets: [
-      "In 👕 LOOK (o toccando il tuo omino) personalizzi 30 capi 8-bit e 8 titoli.",
+      "In 👕 LOOK (o toccando il tuo omino) personalizzi aspetto, 31 capi 8-bit e 9 titoli.",
       "Dalla DEX genera la 📮 CARTOLINA DI VIAGGIO con mappa colorata e le tue 3 Card preferite.",
-      "Al 20/20 ricevi la Medaglia di Lilibeo e puoi avviare il ⚡ NEW GAME+ (Card Holo ✦)!",
+      "Al 20/20 ricevi la Medaglia di Lilibeo e puoi avviare il ⚡ NEW GAME+ (fino a ★5 MAX)!",
     ],
     accentColor: "#ffd166",
   },
@@ -119,8 +119,10 @@ export const OnboardingTutorialModal: React.FC<
   const isFirst = stepIdx === 0;
   const isLast = stepIdx === STEPS.length - 1;
 
-  const handleComplete = async () => {
-    sound8bit.click();
+  const handleComplete = async (skipped = false) => {
+    sound8bit.prime();
+    if (skipped) sound8bit.back();
+    else sound8bit.tutorialComplete();
     setFinishing(true);
     try {
       await onFinish();
@@ -132,7 +134,6 @@ export const OnboardingTutorialModal: React.FC<
   return (
     <div className="fixed inset-0 z-[1200] bg-black/90 flex items-center justify-center p-3 sm:p-4">
       <div className="nes-box-gold w-full max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-5 flex flex-col">
-        {/* Top bar con badge e tasto Salta */}
         <div className="flex items-center justify-between gap-2 border-b-[3px] border-[#2e3d6b] pb-2.5 mb-3">
           <span
             className="font-pixel text-[8px]"
@@ -143,14 +144,13 @@ export const OnboardingTutorialModal: React.FC<
           <button
             type="button"
             disabled={finishing}
-            onClick={() => void handleComplete()}
+            onClick={() => void handleComplete(true)}
             className="font-pixel text-[7px] text-[#94a3b8] hover:text-[#ffd166] px-2 py-1 border border-[#334155]"
           >
             SALTA ✕
           </button>
         </div>
 
-        {/* Icona e titolo */}
         <div className="text-center mb-3">
           <div className="w-16 h-16 mx-auto mb-2.5 bg-[#090d18] border-[3px] border-[#4cc9f0] shadow-[3px_3px_0_#000] flex items-center justify-center text-4xl">
             {current.icon}
@@ -166,7 +166,6 @@ export const OnboardingTutorialModal: React.FC<
           </p>
         </div>
 
-        {/* Elenco punti chiave */}
         <div className="bg-[#090d18] border-[3px] border-[#2e3d6b] p-3 mb-4 space-y-2">
           {current.bullets.map((line, i) => (
             <div
@@ -184,14 +183,13 @@ export const OnboardingTutorialModal: React.FC<
           ))}
         </div>
 
-        {/* Indicatori progresso step */}
         <div className="flex items-center justify-center gap-1.5 mb-4">
           {STEPS.map((s, idx) => (
             <button
               key={s.badge}
               type="button"
               onClick={() => {
-                sound8bit.click();
+                sound8bit.tutorialStep();
                 setStepIdx(idx);
               }}
               aria-label={`Vai allo step ${idx + 1}`}
@@ -206,13 +204,12 @@ export const OnboardingTutorialModal: React.FC<
           ))}
         </div>
 
-        {/* Pulsanti Indietro / Avanti / Inizia */}
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             disabled={isFirst || finishing}
             onClick={() => {
-              sound8bit.click();
+              sound8bit.back();
               setStepIdx((prev) => Math.max(0, prev - 1));
             }}
             className="nes-btn py-3 bg-[#26335c] text-white text-[9px] disabled:opacity-40"
@@ -224,7 +221,7 @@ export const OnboardingTutorialModal: React.FC<
             <button
               type="button"
               disabled={finishing}
-              onClick={() => void handleComplete()}
+              onClick={() => void handleComplete(false)}
               className="nes-btn py-3 bg-[#38e54d] text-black text-[9px]"
             >
               {finishing ? "AVVIO..." : "🚀 INIZIA!"}
@@ -233,7 +230,7 @@ export const OnboardingTutorialModal: React.FC<
             <button
               type="button"
               onClick={() => {
-                sound8bit.click();
+                sound8bit.tutorialStep();
                 setStepIdx((prev) => Math.min(STEPS.length - 1, prev + 1));
               }}
               className="nes-btn py-3 bg-[#ffd166] text-black text-[9px]"

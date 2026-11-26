@@ -98,7 +98,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
   );
 
   const handleGenderChange = (nextGender: AvatarGender) => {
-    sound8bit.click();
+    sound8bit.equipItem();
     setDraft((d) => ({
       ...d,
       gender: nextGender,
@@ -111,7 +111,9 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
     slot: CosmeticSlot,
     currentlyUnlocked: boolean,
   ) => {
-    sound8bit.click();
+    if (currentlyUnlocked) sound8bit.back();
+    else sound8bit.claimReward();
+
     setOverridesDraft((prev) => {
       if (currentlyUnlocked) {
         if (draft[slot] === itemId) {
@@ -138,7 +140,9 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
   };
 
   const toggleTitleOverride = (tId: string, currentlyUnlocked: boolean) => {
-    sound8bit.click();
+    if (currentlyUnlocked) sound8bit.back();
+    else sound8bit.claimReward();
+
     setOverridesDraft((prev) => {
       if (currentlyUnlocked) {
         if (draftTitle === tId) {
@@ -163,7 +167,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
   };
 
   const handleUnlockAllCosmeticsAndTitles = () => {
-    sound8bit.click();
+    sound8bit.claimReward();
     setOverridesDraft({
       unlockedCosmetics: visibleCosmetics.map((c) => c.id),
       lockedCosmetics: [],
@@ -173,7 +177,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
   };
 
   const handleLockAllCosmeticsAndTitles = () => {
-    sound8bit.click();
+    sound8bit.back();
     setDraft((d) => ({
       ...DEFAULT_AVATAR,
       gender: d.gender,
@@ -196,7 +200,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
   };
 
   const handleEquipFullCreatorSet = () => {
-    sound8bit.easterEgg();
+    sound8bit.creatorSupreme();
     setOverridesDraft((prev) => ({
       ...prev,
       lockedCosmetics: prev.lockedCosmetics.filter(
@@ -219,6 +223,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
   };
 
   const handleSaveAll = async () => {
+    sound8bit.prime();
     sound8bit.click();
     setSaving(true);
     try {
@@ -239,6 +244,8 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
         }
       }
       onClose();
+    } catch {
+      sound8bit.error();
     } finally {
       setSaving(false);
     }
@@ -395,7 +402,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    sound8bit.click();
+                    sound8bit.equipItem();
                     setDraft((d) => ({ ...d, hat: "hat-none" }));
                   }}
                   className="nes-btn px-2 py-1 bg-[#ffd166] text-black text-[7px] shrink-0"
@@ -416,7 +423,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                     key={tone.id}
                     type="button"
                     onClick={() => {
-                      sound8bit.click();
+                      sound8bit.equipItem();
                       setDraft((d) => ({ ...d, skinTone: tone.id }));
                     }}
                     className={`border-2 py-2 px-1 flex flex-col items-center gap-1 transition ${
@@ -448,7 +455,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                     key={hc.id}
                     type="button"
                     onClick={() => {
-                      sound8bit.click();
+                      sound8bit.equipItem();
                       setDraft((d) => ({ ...d, hairColor: hc.id }));
                     }}
                     className={`border-2 py-1.5 px-1 flex flex-col items-center gap-1 transition ${
@@ -480,7 +487,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                     key={hs.id}
                     type="button"
                     onClick={() => {
-                      sound8bit.click();
+                      sound8bit.equipItem();
                       setDraft((d) => ({ ...d, hairStyle: hs.id }));
                     }}
                     className={`nes-btn py-2 text-[7px] ${
@@ -507,7 +514,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                       key={bs.id}
                       type="button"
                       onClick={() => {
-                        sound8bit.click();
+                        sound8bit.equipItem();
                         setDraft((d) => ({ ...d, beard: bs.id }));
                       }}
                       className={`nes-btn py-2 text-[7px] ${
@@ -584,7 +591,9 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                       type="button"
                       disabled={!unlocked}
                       onClick={() => {
-                        sound8bit.click();
+                        if (isCreatorExclusive) sound8bit.creatorSupreme();
+                        else if (isMaxPrestigeReward) sound8bit.claimReward();
+                        else sound8bit.equipItem();
                         setDraft((d) => ({ ...d, [activeSlot]: item.id }));
                       }}
                       className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
@@ -687,7 +696,9 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                     type="button"
                     disabled={!unlocked}
                     onClick={() => {
-                      sound8bit.click();
+                      if (isCreatorExclusive) sound8bit.creatorSupreme();
+                      else if (isMaxPrestigeReward) sound8bit.claimReward();
+                      else sound8bit.equipItem();
                       setDraftTitle(t.id);
                     }}
                     className="min-w-0 flex-1 text-left"

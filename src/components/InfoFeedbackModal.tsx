@@ -130,15 +130,17 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
   const handleSubmitFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isOnCooldown) return;
-    sound8bit.click();
+    sound8bit.prime();
     setError(null);
     setSentSuccess(false);
 
     if (message.trim().length < 5) {
+      sound8bit.error();
       setError("Scrivi almeno 5 caratteri prima di inviare.");
       return;
     }
 
+    sound8bit.click();
     setSending(true);
     try {
       const res = await api.submitFeedback({
@@ -151,8 +153,9 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
         setCooldownEndMs(Date.now() + res.remainingMs);
         setNowMs(Date.now());
       }
-      sound8bit.easterEgg();
+      sound8bit.feedbackSent();
     } catch (err) {
+      sound8bit.error();
       setError(err instanceof Error ? err.message : "Errore durante l’invio.");
       if (!isSuperuser) {
         void api.getFeedbackStatus().then((st) => {
@@ -168,6 +171,7 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
   };
 
   const handleToggleRead = async (item: FeedbackItem) => {
+    sound8bit.prime();
     sound8bit.click();
     setBusyId(item.id);
     try {
@@ -177,17 +181,22 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
           f.id === item.id ? { ...f, isRead: !item.isRead } : f,
         ),
       );
+    } catch {
+      sound8bit.error();
     } finally {
       setBusyId(null);
     }
   };
 
   const handleDeleteFeedback = async (id: string) => {
-    sound8bit.click();
+    sound8bit.prime();
     setBusyId(id);
     try {
       await api.deleteFeedback(id);
       setInbox((prev) => prev.filter((f) => f.id !== id));
+      sound8bit.back();
+    } catch {
+      sound8bit.error();
     } finally {
       setBusyId(null);
     }
@@ -454,7 +463,7 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                sound8bit.click();
+                sound8bit.tutorialStep();
                 onClose();
                 onOpenTutorial();
               }}
