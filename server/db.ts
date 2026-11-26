@@ -26,6 +26,7 @@ export interface UserRecord {
   isSuperuser: boolean;
   superuserOverrides: SuperuserOverrides;
   onboardingCompleted: boolean;
+  lastFeedbackAt: string | null;
   createdAt: string;
 }
 
@@ -125,6 +126,9 @@ function mapUserRow(r: Record<string, unknown>): UserRecord {
     isSuperuser: Boolean(r.is_superuser),
     superuserOverrides: sanitizeSuperuserOverrides(r.superuser_overrides),
     onboardingCompleted: r.onboarding_completed !== false,
+    lastFeedbackAt: r.last_feedback_at
+      ? new Date(String(r.last_feedback_at)).toISOString()
+      : null,
     createdAt: new Date(String(r.created_at)).toISOString(),
   };
 }
@@ -145,6 +149,7 @@ export async function initDb(): Promise<void> {
       is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
       superuser_overrides JSONB NOT NULL DEFAULT '${DEFAULT_OVERRIDES_JSON}'::jsonb,
       onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE,
+      last_feedback_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
@@ -157,7 +162,8 @@ export async function initDb(): Promise<void> {
       ADD COLUMN IF NOT EXISTS last_bounty_date TEXT,
       ADD COLUMN IF NOT EXISTS is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS superuser_overrides JSONB NOT NULL DEFAULT '${DEFAULT_OVERRIDES_JSON}'::jsonb,
-      ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE;
+      ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS last_feedback_at TIMESTAMPTZ;
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_nickname_lower
       ON users (LOWER(nickname));
@@ -225,7 +231,7 @@ export async function ensureSuperuser(
   );
 }
 
-const USER_COLUMNS = `id, username, nickname, password_hash, avatar_config, equipped_title, prestige, bonus_xp, bounty_streak, last_bounty_date, is_superuser, superuser_overrides, onboarding_completed, created_at`;
+const USER_COLUMNS = `id, username, nickname, password_hash, avatar_config, equipped_title, prestige, bonus_xp, bounty_streak, last_bounty_date, is_superuser, superuser_overrides, onboarding_completed, last_feedback_at, created_at`;
 
 export async function findUserByUsername(
   username: string,
@@ -268,7 +274,6 @@ export async function createUser(user: {
   passwordHash: string;
   avatar: AvatarConfig;
 }): Promise<UserRecord> {
-  // I nuovi utenti partono con onboarding_completed = FALSE per mostrare Benvenuto + Tutorial
   const { rows } = await pool.query(
     `INSERT INTO users (id, username, nickname, password_hash, avatar_config, equipped_title, onboarding_completed)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6, FALSE)
@@ -290,6 +295,14 @@ export async function markOnboardingCompleted(userId: string): Promise<void> {
     `UPDATE users SET onboarding_completed = TRUE WHERE id = $1`,
     [userId],
   );
+}
+
+export async function touchUserLastFeedback(userId: string): Promise<string> {
+  const { rows } = await pool.query(
+    `UPDATE users SET last_feedback_at = NOW() WHERE id = $1 RETURNING last_feedback_at`,
+    [userId],
+  );
+  return new Date(String(rows[0].last_feedback_at)).toISOString();
 }
 
 export async function updateUserNickname(

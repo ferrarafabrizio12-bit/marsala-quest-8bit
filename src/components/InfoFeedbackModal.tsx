@@ -4,9 +4,8 @@ import type { FeedbackCategory, FeedbackItem } from "../types/game";
 import { sound8bit } from "../utils/sound8bit";
 
 // >>> INSERISCI QUI I TUOI LINK SOCIAL REALI <<<
-const INSTAGRAM_URL =
-  "https://www.instagram.com/_fabrif_?evlk=MXJyY3BiY3V0MWtxbQ%3D%3D&utm_source=qr";
-const GITHUB_URL = "https://github.com/repos?q=owner%3A%40me";
+const INSTAGRAM_URL = "https://instagram.com/tuo_username_instagram";
+const GITHUB_URL = "https://github.com/tuo_username_github";
 
 interface InfoFeedbackModalProps {
   isSuperuser?: boolean;
@@ -32,6 +31,15 @@ const CATEGORY_OPTIONS: {
   },
 ];
 
+function formatCountdown(ms: number): string {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
+}
+
 export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
   isSuperuser = false,
   onOpenTutorial,
@@ -39,17 +47,67 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
 }) => {
   const [tab, setTab] = useState<"feedback" | "about" | "inbox">("feedback");
 
-  // Stato form invio feedback (visibile a tutti)
+  // Stato form invio feedback + cooldown 12h
   const [category, setCategory] = useState<FeedbackCategory>("suggerimento");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingCooldown, setLoadingCooldown] = useState(!isSuperuser);
+  const [cooldownEndMs, setCooldownEndMs] = useState<number | null>(null);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
 
   // Stato inbox privata (solo Superuser)
   const [inbox, setInbox] = useState<FeedbackItem[]>([]);
   const [loadingInbox, setLoadingInbox] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const remainingMs = cooldownEndMs ? Math.max(0, cooldownEndMs - nowMs) : 0;
+  const isOnCooldown = !isSuperuser && remainingMs > 0;
+
+  // Controlla lo stato del cooldown 12h all'apertura
+  useEffect(() => {
+    if (isSuperuser) {
+      setLoadingCooldown(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingCooldown(true);
+    void api
+      .getFeedbackStatus()
+      .then((res) => {
+        if (cancelled) return;
+        if (!res.canSubmit && res.remainingMs > 0) {
+          setCooldownEndMs(Date.now() + res.remainingMs);
+          setNowMs(Date.now());
+        } else {
+          setCooldownEndMs(null);
+        }
+      })
+      .catch(() => {
+        // Il backend valida comunque l'invio in caso di errore di rete
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingCooldown(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSuperuser]);
+
+  // Aggiorna il timer ogni secondo mentre il cooldown è attivo
+  useEffect(() => {
+    if (!cooldownEndMs || cooldownEndMs <= Date.now()) return;
+    const id = window.setInterval(() => {
+      const current = Date.now();
+      setNowMs(current);
+      if (current >= cooldownEndMs) {
+        setCooldownEndMs(null);
+      }
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [cooldownEndMs]);
 
   const loadInbox = async () => {
     if (!isSuperuser) return;
@@ -72,6 +130,7 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
 
   const handleSubmitFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isOnCooldown) return;
     sound8bit.click();
     setError(null);
     setSentSuccess(false);
@@ -83,12 +142,27 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
 
     setSending(true);
     try {
-      await api.submitFeedback({ category, message: message.trim() });
+      const res = await api.submitFeedback({
+        category,
+        message: message.trim(),
+      });
       setMessage("");
       setSentSuccess(true);
+      if (!isSuperuser && res.remainingMs > 0) {
+        setCooldownEndMs(Date.now() + res.remainingMs);
+        setNowMs(Date.now());
+      }
       sound8bit.easterEgg();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore durante l’invio.");
+      if (!isSuperuser) {
+        void api.getFeedbackStatus().then((st) => {
+          if (!st.canSubmit && st.remainingMs > 0) {
+            setCooldownEndMs(Date.now() + st.remainingMs);
+            setNowMs(Date.now());
+          }
+        });
+      }
     } finally {
       setSending(false);
     }
@@ -183,7 +257,7 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
           </button>
         </div>
 
-        {/* TAB 1: INVIO FEEDBACK (privato verso l'autore) */}
+        {/* TAB 1: INVIO FEEDBACK (privato verso l'autore + timer 12h) */}
         {tab === "feedback" && (
           <form
             onSubmit={(e) => void handleSubmitFeedback(e)}
@@ -196,9 +270,24 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
               <p className="text-lg text-[#cbd5e1] leading-tight">
                 Hai trovato un bug, un luogo da aggiungere o un’idea per nuove
                 funzionalità? Scrivilo qui: il messaggio arriva in privato solo
-                allo sviluppatore.
+                allo sviluppatore (1 invio ogni 12 ore).
               </p>
             </div>
+
+            {isOnCooldown && (
+              <div className="bg-[#2c1608] border-[3px] border-[#ff9e00] p-3 text-center">
+                <p className="font-pixel text-[8px] text-[#ffd166] mb-1">
+                  ⏳ ATTESA TRA UN FEEDBACK E L’ALTRO
+                </p>
+                <p className="font-pixel text-xs text-[#ff9e00] tracking-wider">
+                  {formatCountdown(remainingMs)}
+                </p>
+                <p className="text-lg text-[#fde68a] leading-tight mt-1">
+                  Hai già inviato un messaggio di recente. Potrai scriverne un
+                  altro allo scadere del timer!
+                </p>
+              </div>
+            )}
 
             <div>
               <p className="font-pixel text-[8px] text-[#ffd166] mb-1.5">
@@ -209,11 +298,12 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
                   <button
                     key={opt.id}
                     type="button"
+                    disabled={isOnCooldown}
                     onClick={() => {
                       sound8bit.click();
                       setCategory(opt.id);
                     }}
-                    className={`nes-btn py-2 text-[7px] sm:text-[8px] ${
+                    className={`nes-btn py-2 text-[7px] sm:text-[8px] disabled:opacity-45 ${
                       category === opt.id
                         ? opt.badgeColor
                         : "bg-[#26335c] text-slate-300"
@@ -232,13 +322,18 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
               <textarea
                 rows={5}
                 maxLength={1000}
+                disabled={isOnCooldown || loadingCooldown}
                 value={message}
                 onChange={(e) => {
                   setMessage(e.target.value);
                   if (sentSuccess) setSentSuccess(false);
                 }}
-                placeholder="Descrivi il bug riscontrato o il miglioramento che vorresti vedere..."
-                className="w-full bg-[#090d18] border-[3px] border-[#4cc9f0] p-2.5 text-xl text-white outline-none focus:border-[#ffd166] resize-none"
+                placeholder={
+                  isOnCooldown
+                    ? "Attendi la fine del timer di 12 ore per inviare un nuovo feedback..."
+                    : "Descrivi il bug riscontrato o il miglioramento che vorresti vedere..."
+                }
+                className="w-full bg-[#090d18] border-[3px] border-[#4cc9f0] p-2.5 text-xl text-white outline-none focus:border-[#ffd166] resize-none disabled:opacity-50"
               />
             </div>
 
@@ -256,10 +351,21 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
 
             <button
               type="submit"
-              disabled={sending || message.trim().length < 5}
+              disabled={
+                sending ||
+                loadingCooldown ||
+                isOnCooldown ||
+                message.trim().length < 5
+              }
               className="nes-btn w-full py-3 bg-[#38e54d] text-black text-[9px] disabled:opacity-50"
             >
-              {sending ? "INVIO IN CORSO..." : "📨 INVIA FEEDBACK"}
+              {loadingCooldown
+                ? "VERIFICA TIMER..."
+                : sending
+                  ? "INVIO IN CORSO..."
+                  : isOnCooldown
+                    ? `⏳ DISPONIBILE TRA ${formatCountdown(remainingMs)}`
+                    : "📨 INVIA FEEDBACK"}
             </button>
           </form>
         )}

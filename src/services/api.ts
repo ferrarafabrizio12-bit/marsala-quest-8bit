@@ -181,11 +181,21 @@ export const api = {
       },
     ),
 
+  getFeedbackStatus: () =>
+    request<{
+      canSubmit: boolean;
+      nextAllowedAt: string | null;
+      remainingMs: number;
+    }>("/feedback/status"),
+
   submitFeedback: (payload: { category: FeedbackCategory; message: string }) =>
-    request<{ ok: boolean }>("/feedback", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+    request<{ ok: boolean; nextAllowedAt: string | null; remainingMs: number }>(
+      "/feedback",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
 
   getAdminFeedbacks: () =>
     request<{ feedbacks: FeedbackItem[] }>("/admin/feedbacks"),

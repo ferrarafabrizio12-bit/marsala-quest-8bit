@@ -28,6 +28,7 @@ import {
   removeEasterEgg,
   setAllEasterEggs,
   setFeedbackRead,
+  touchUserLastFeedback,
   updateSuperuserOverrides,
   updateUserAvatar,
   updateUserNickname,
@@ -60,6 +61,7 @@ app.set("trust proxy", 1);
 
 const PORT = Number(process.env.PORT) || 3001;
 const IS_PROD = process.env.NODE_ENV === "production";
+const FEEDBACK_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 
 const JWT_SECRET =
   process.env.JWT_SECRET ||
@@ -170,6 +172,40 @@ function buildDailyBounty(u: UserRecord) {
     completedToday,
     bonusXp: nextStreakIfClaimed >= 3 ? 150 : 100,
   };
+}
+
+function getFeedbackCooldownStatus(u: UserRecord): {
+  canSubmit: boolean;
+  nextAllowedAt: string | null;
+  remainingMs: number;
+} {
+  if (u.isSuperuser || !u.lastFeedbackAt) {
+    return { canSubmit: true, nextAllowedAt: null, remainingMs: 0 };
+  }
+  const lastMs = new Date(u.lastFeedbackAt).getTime();
+  if (!Number.isFinite(lastMs)) {
+    return { canSubmit: true, nextAllowedAt: null, remainingMs: 0 };
+  }
+  const nextMs = lastMs + FEEDBACK_COOLDOWN_MS;
+  const remainingMs = Math.max(0, nextMs - Date.now());
+  if (remainingMs <= 0) {
+    return { canSubmit: true, nextAllowedAt: null, remainingMs: 0 };
+  }
+  return {
+    canSubmit: false,
+    nextAllowedAt: new Date(nextMs).toISOString(),
+    remainingMs,
+  };
+}
+
+function formatCooldownItalian(ms: number): string {
+  const totalSec = Math.ceil(ms / 1000);
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
 }
 
 function escapeXml(str: string): string {
@@ -965,7 +1001,27 @@ app.post(
   },
 );
 
-// --- FEEDBACK UTENTI (Scrittura per tutti, Lettura/Gestione solo Superuser) ---
+// --- FEEDBACK UTENTI (Cooldown 12h per utenti standard, Inbox solo Superuser) ---
+app.get(
+  "/api/feedback/status",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const user = await findUserById(req.userId!);
+      if (!user) {
+        res.status(404).json({ error: "Utente non trovato." });
+        return;
+      }
+      res.json(getFeedbackCooldownStatus(user));
+    } catch (err) {
+      console.error("[FEEDBACK STATUS ERROR]", err);
+      res
+        .status(500)
+        .json({ error: "Impossibile verificare lo stato del feedback." });
+    }
+  },
+);
+
 app.post(
   "/api/feedback",
   authMiddleware,
@@ -974,6 +1030,16 @@ app.post(
       const user = await findUserById(req.userId!);
       if (!user) {
         res.status(404).json({ error: "Utente non trovato." });
+        return;
+      }
+
+      const cooldown = getFeedbackCooldownStatus(user);
+      if (!cooldown.canSubmit) {
+        res.status(429).json({
+          error: `Hai già inviato un feedback. Potrai inviarne un altro tra ${formatCooldownItalian(cooldown.remainingMs)}.`,
+          nextAllowedAt: cooldown.nextAllowedAt,
+          remainingMs: cooldown.remainingMs,
+        });
         return;
       }
 
@@ -1006,7 +1072,15 @@ app.post(
         message: cleanMsg,
       });
 
-      res.status(201).json({ ok: true });
+      const sentAt = await touchUserLastFeedback(user.id);
+      const nextAllowedAt = user.isSuperuser
+        ? null
+        : new Date(
+            new Date(sentAt).getTime() + FEEDBACK_COOLDOWN_MS,
+          ).toISOString();
+      const remainingMs = user.isSuperuser ? 0 : FEEDBACK_COOLDOWN_MS;
+
+      res.status(201).json({ ok: true, nextAllowedAt, remainingMs });
     } catch (err) {
       console.error("[CREATE FEEDBACK ERROR]", err);
       res

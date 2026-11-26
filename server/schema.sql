@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
   is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
   superuser_overrides JSONB NOT NULL DEFAULT '{"unlockedCosmetics":[],"lockedCosmetics":[],"unlockedTitles":[],"lockedTitles":[]}'::jsonb,
   onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE,
+  last_feedback_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
