@@ -5,6 +5,8 @@ import type {
 } from "../../shared/cosmetics";
 import type {
   DailyBountyInfo,
+  FeedbackCategory,
+  FeedbackItem,
   LeaderboardEntry,
   RetroTheme,
   UnlockData,
@@ -57,6 +59,11 @@ export const api = {
     request<{ token: string; user: UserProfile }>("/auth/login", {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+
+  completeOnboarding: () =>
+    request<{ onboardingCompleted: boolean }>("/auth/onboarding-complete", {
+      method: "PATCH",
     }),
 
   updateNickname: (nickname: string) =>
@@ -173,6 +180,29 @@ export const api = {
         body: JSON.stringify(payload),
       },
     ),
+
+  submitFeedback: (payload: { category: FeedbackCategory; message: string }) =>
+    request<{ ok: boolean }>("/feedback", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  getAdminFeedbacks: () =>
+    request<{ feedbacks: FeedbackItem[] }>("/admin/feedbacks"),
+
+  setFeedbackRead: (id: string, isRead: boolean) =>
+    request<{ ok: boolean }>(
+      `/admin/feedbacks/${encodeURIComponent(id)}/read`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ isRead }),
+      },
+    ),
+
+  deleteFeedback: (id: string) =>
+    request<{ ok: boolean }>(`/admin/feedbacks/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
 
   getLeaderboard: () =>
     request<{ leaderboard: LeaderboardEntry[] }>("/leaderboard"),

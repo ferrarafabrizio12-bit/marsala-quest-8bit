@@ -1,163 +1,160 @@
-import React, { useState } from 'react';
-import { type AvatarGender, DEFAULT_AVATAR } from '../../shared/cosmetics';
-import { api, setStoredToken } from '../services/api';
-import { sound8bit } from '../utils/sound8bit';
-import { PixelAvatar } from './PixelAvatar';
-import type { UserProfile } from '../types/game';
+import React, { useState } from "react";
+import type { AvatarGender } from "../../shared/cosmetics";
+import { api, setStoredToken } from "../services/api";
+import type { UserProfile } from "../types/game";
+import { sound8bit } from "../utils/sound8bit";
 
 interface AuthScreenProps {
   onAuthenticated: (user: UserProfile) => void;
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [username, setUsername] = useState('');
-  const [nickname, setNickname] = useState('');
-  const [password, setPassword] = useState('');
-  const [gender, setGender] = useState<AvatarGender>('male');
-  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [username, setUsername] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [gender, setGender] = useState<AvatarGender>("male");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     sound8bit.click();
     setError(null);
     setLoading(true);
+
     try {
       const res =
-        mode === 'register'
-          ? await api.register({ username, nickname, password, gender })
-          : await api.login({ username, password });
+        mode === "login"
+          ? await api.login({ username, password })
+          : await api.register({ username, nickname, password, gender });
       setStoredToken(res.token);
-      sound8bit.syncViewpoint();
       onAuthenticated(res.user);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Errore di accesso');
+      setError(
+        err instanceof Error ? err.message : "Errore di autenticazione.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-[100dvh] w-full flex items-center justify-center p-4 bg-[#0b0e1a] relative overflow-y-auto">
-      <div className="absolute inset-0 crt-scanlines pointer-events-none opacity-60" />
-
-      <div className="nes-box-gold w-full max-w-md p-5 sm:p-6 relative z-10 my-4">
-        <div className="text-center mb-5">
+    <div className="min-h-[100dvh] w-screen bg-[#0b0e1a] flex items-center justify-center p-4 safe-top safe-bottom">
+      <div className="nes-box-gold w-full max-w-md p-5">
+        <div className="flex flex-col items-center text-center mb-5">
           <img
             src="/Marsala-Quest-8bit-ico.png"
             alt="Marsala Quest 8-Bit"
-            className="w-20 h-20 mx-auto mb-3 border-[3px] border-[#ffd166] shadow-[4px_4px_0_#000]"
-            style={{ imageRendering: 'pixelated' }}
+            className="w-20 h-20 border-[3px] border-[#ffd166] shadow-[4px_4px_0_#000] mb-3"
+            style={{ imageRendering: "pixelated" }}
           />
-          <div className="inline-block bg-[#ff4d6d] border-2 border-black px-3 py-1 font-pixel text-[8px] text-white mb-2.5 shadow-[3px_3px_0_#000]">
-            ★ CARTRIDGE EDITION • 397 A.C. ★
-          </div>
-          <h1 className="font-pixel text-lg sm:text-xl text-[#ffd166] drop-shadow-[3px_3px_0_#000] leading-relaxed">
-            MARSALA QUEST
-            <span className="block text-[#38e54d] text-xs mt-1.5">8-BIT REAL GPS</span>
+          <h1 className="font-pixel text-sm sm:text-base text-[#ffd166] leading-snug">
+            MARSALA QUEST 8-BIT
           </h1>
-          <p className="text-xl text-[#c7d2fe] mt-2 leading-tight">
-            Mappa grigia, 20 luoghi reali di Marsala, foto-card retro e Medaglia di Lilibeo!
+          <p className="text-xl text-[#4cc9f0] mt-1">
+            Esplora Lilibeo, illumina la mappa e colleziona le Card!
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="grid grid-cols-2 gap-2 mb-4">
           <button
             type="button"
             onClick={() => {
               sound8bit.click();
-              setMode('login');
+              setMode("login");
               setError(null);
             }}
             className={`nes-btn py-2.5 text-[9px] ${
-              mode === 'login' ? 'bg-[#ffd166] text-black' : 'bg-[#26335c] text-[#c7d2fe]'
+              mode === "login"
+                ? "bg-[#ffd166] text-black"
+                : "bg-[#26335c] text-slate-300"
             }`}
           >
-            CONTINUA
+            ACCEDI
           </button>
           <button
             type="button"
             onClick={() => {
               sound8bit.click();
-              setMode('register');
+              setMode("register");
               setError(null);
             }}
             className={`nes-btn py-2.5 text-[9px] ${
-              mode === 'register' ? 'bg-[#38e54d] text-black' : 'bg-[#26335c] text-[#c7d2fe]'
+              mode === "register"
+                ? "bg-[#38e54d] text-black"
+                : "bg-[#26335c] text-slate-300"
             }`}
           >
-            NUOVA PARTITA
+            NUOVO PLAYER
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3.5">
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
           <div>
             <label className="block font-pixel text-[8px] text-[#ffd166] mb-1">
-              ▶ USERNAME LOGIN
+              USERNAME
             </label>
             <input
               type="text"
               required
+              autoComplete="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="es. JacoMangiaCaitta"
-              className="w-full bg-[#090d18] border-[3px] border-[#4cc9f0] px-3 py-2 text-2xl text-white focus:border-[#ffd166] outline-none"
+              placeholder="es. lilibeo89"
+              className="w-full bg-[#090d18] border-[3px] border-[#4cc9f0] px-3 py-2 text-xl text-white outline-none focus:border-[#ffd166]"
             />
           </div>
 
-          {mode === 'register' && (
+          {mode === "register" && (
             <>
               <div>
-                <label className="block font-pixel text-[8px] text-[#38e54d] mb-1">
-                  ▶ NICKNAME ESPLORATORE
+                <label className="block font-pixel text-[8px] text-[#ffd166] mb-1">
+                  NICKNAME IN CLASSIFICA
                 </label>
                 <input
                   type="text"
                   required
-                  maxLength={20}
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
-                  placeholder="es. uPatruneRiMaissala"
-                  className="w-full bg-[#090d18] border-[3px] border-[#38e54d] px-3 py-2 text-2xl text-white focus:border-[#ffd166] outline-none"
+                  placeholder="Nome visibile agli altri player"
+                  className="w-full bg-[#090d18] border-[3px] border-[#4cc9f0] px-3 py-2 text-xl text-white outline-none focus:border-[#ffd166]"
                 />
               </div>
 
               <div>
-                <label className="block font-pixel text-[8px] text-[#4cc9f0] mb-1.5">
-                  ▶ SCEGLI IL TUO PERSONAGGIO
+                <label className="block font-pixel text-[8px] text-[#ffd166] mb-1">
+                  AVATAR INIZIALE
                 </label>
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       sound8bit.click();
-                      setGender('male');
+                      setGender("male");
                     }}
-                    className={`border-[3px] p-2 flex items-center justify-center gap-2.5 ${
-                      gender === 'male'
-                        ? 'border-[#4cc9f0] bg-[#162647]'
-                        : 'border-[#2e3d6b] bg-[#090d18] opacity-75'
+                    className={`nes-btn py-2 text-[8px] ${
+                      gender === "male"
+                        ? "bg-[#4cc9f0] text-black"
+                        : "bg-[#26335c] text-white"
                     }`}
                   >
-                    <PixelAvatar avatar={{ ...DEFAULT_AVATAR, gender: 'male' }} size={28} />
-                    <span className="font-pixel text-[9px] text-[#4cc9f0]">♂ LUI</span>
+                    ♂ ESPLORATORE
                   </button>
-
                   <button
                     type="button"
                     onClick={() => {
                       sound8bit.click();
-                      setGender('female');
+                      setGender("female");
                     }}
-                    className={`border-[3px] p-2 flex items-center justify-center gap-2.5 ${
-                      gender === 'female'
-                        ? 'border-[#ff4d6d] bg-[#361529]'
-                        : 'border-[#2e3d6b] bg-[#090d18] opacity-75'
+                    className={`nes-btn py-2 text-[8px] ${
+                      gender === "female"
+                        ? "bg-[#f472b6] text-black"
+                        : "bg-[#26335c] text-white"
                     }`}
                   >
-                    <PixelAvatar avatar={{ ...DEFAULT_AVATAR, gender: 'female' }} size={28} />
-                    <span className="font-pixel text-[9px] text-[#ff4d6d]">♀ LEI</span>
+                    ♀ ESPLORATRICE
                   </button>
                 </div>
               </div>
@@ -166,21 +163,71 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
 
           <div>
             <label className="block font-pixel text-[8px] text-[#ffd166] mb-1">
-              ▶ PASSWORD SEGRETA
+              PASSWORD
             </label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Minimo 6 caratteri"
-              className="w-full bg-[#090d18] border-[3px] border-[#4cc9f0] px-3 py-2 text-2xl text-white focus:border-[#ffd166] outline-none"
-            />
+            <div className="relative flex items-center">
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                autoComplete={
+                  mode === "login" ? "current-password" : "new-password"
+                }
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Minimo 6 caratteri"
+                className="w-full bg-[#090d18] border-[3px] border-[#4cc9f0] pl-3 pr-12 py-2 text-xl text-white outline-none focus:border-[#ffd166]"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  sound8bit.click();
+                  setShowPassword((prev) => !prev);
+                }}
+                aria-label={
+                  showPassword ? "Nascondi password" : "Mostra password"
+                }
+                title={showPassword ? "Nascondi password" : "Mostra password"}
+                className="absolute right-2 p-1.5 text-[#4cc9f0] hover:text-[#ffd166] focus:outline-none"
+              >
+                {showPassword ? (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="square"
+                    strokeLinejoin="miter"
+                  >
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                    <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                ) : (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="square"
+                    strokeLinejoin="miter"
+                  >
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
 
           {error && (
-            <div className="bg-[#4c0519] border-[3px] border-[#ff4d6d] p-2 text-xl text-[#fecdd3]">
+            <div className="bg-[#4c0519] border-2 border-[#ff4d6d] p-2.5 text-lg text-[#fecdd3]">
               ⚠ {error}
             </div>
           )}
@@ -188,13 +235,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
           <button
             type="submit"
             disabled={loading}
-            className="nes-btn w-full py-3.5 bg-[#ff4d6d] text-white text-[11px] disabled:opacity-50"
+            className="nes-btn w-full py-3.5 bg-[#38e54d] text-black text-[10px] disabled:opacity-50"
           >
             {loading
-              ? 'CARICAMENTO...'
-              : mode === 'register'
-                ? '★ PRESS START ★'
-                : '▶ CARICA SALVATAGGIO'}
+              ? "CONNESSIONE..."
+              : mode === "login"
+                ? "▶ ENTRA A MARSALA"
+                : "★ CREA AVVENTURIERO"}
           </button>
         </form>
       </div>

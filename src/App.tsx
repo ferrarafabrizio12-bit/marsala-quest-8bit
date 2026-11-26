@@ -28,6 +28,8 @@ import { LilibeoMedalModal } from "./components/LilibeoMedalModal";
 import { AvatarWardrobeModal } from "./components/AvatarWardrobeModal";
 import { WayfinderCompass } from "./components/WayfinderCompass";
 import { TravelPostcardModal } from "./components/TravelPostcardModal";
+import { OnboardingTutorialModal } from "./components/OnboardingTutorialModal";
+import { InfoFeedbackModal } from "./components/InfoFeedbackModal";
 import {
   BottomDock,
   DexModal,
@@ -82,6 +84,8 @@ export default function App() {
   const [showMedal, setShowMedal] = useState(false);
   const [showPrestigeConfirm, setShowPrestigeConfirm] = useState(false);
   const [activatingPrestige, setActivatingPrestige] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
 
   const [sortByNearest, setSortByNearest] = useState<boolean>(
     () => localStorage.getItem("marsala_filter_nearest") === "1",
@@ -161,6 +165,25 @@ export default function App() {
     if (getStoredToken()) void loadProgress();
     else setBooting(false);
   }, [loadProgress]);
+
+  // Apri automaticamente Benvenuto + Tutorial SOLO per i nuovi utenti (onboardingCompleted === false)
+  useEffect(() => {
+    if (user && user.onboardingCompleted === false) {
+      setShowTutorial(true);
+    }
+  }, [user?.id, user?.onboardingCompleted]);
+
+  const handleFinishTutorial = async () => {
+    setShowTutorial(false);
+    if (user && user.onboardingCompleted === false) {
+      setUser((prev) => (prev ? { ...prev, onboardingCompleted: true } : prev));
+      try {
+        await api.completeOnboarding();
+      } catch {
+        // Ignora errore temporaneo di rete
+      }
+    }
+  };
 
   useEffect(() => {
     if (!navTargetPoi || gps.lat === null || gps.lng === null) {
@@ -463,7 +486,6 @@ export default function App() {
     }
   };
 
-  // --- FUNZIONI SUPERUSER PER DEX & ROLLBACK ---
   const handleQuickUnlockPoi = async (poi: PoiDefinition) => {
     if (!user) return;
     const res = await api.unlockPoi({
@@ -561,6 +583,8 @@ export default function App() {
     setNavTargetPoi(null);
     setWalkingRoute(null);
     setTotalXp(0);
+    setShowTutorial(false);
+    setShowInfoModal(false);
     setTheme("default");
   };
 
@@ -613,6 +637,7 @@ export default function App() {
         gps={gps}
         onTitleTap={handleTitleTap}
         onSkyTap={handleSkyTap}
+        onOpenInfo={() => setShowInfoModal(true)}
         onRadarTap={handleRadarTap}
         onProgressTap={handleProgressTap}
         onToggleOnlyMissing={toggleOnlyMissing}
@@ -864,6 +889,21 @@ export default function App() {
           avatar={user.avatar}
           titleId={user.title}
           onClose={() => setShowMedal(false)}
+        />
+      )}
+
+      {showInfoModal && (
+        <InfoFeedbackModal
+          isSuperuser={Boolean(user.isSuperuser)}
+          onOpenTutorial={() => setShowTutorial(true)}
+          onClose={() => setShowInfoModal(false)}
+        />
+      )}
+
+      {showTutorial && (
+        <OnboardingTutorialModal
+          nickname={user.nickname}
+          onFinish={handleFinishTutorial}
         />
       )}
     </main>

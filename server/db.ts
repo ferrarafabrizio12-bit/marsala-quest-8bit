@@ -25,6 +25,7 @@ export interface UserRecord {
   lastBountyDate: string | null;
   isSuperuser: boolean;
   superuserOverrides: SuperuserOverrides;
+  onboardingCompleted: boolean;
   createdAt: string;
 }
 
@@ -53,6 +54,18 @@ export interface LeaderboardRow {
   easterEggs: string[];
 }
 
+export type FeedbackCategoryRecord = "suggerimento" | "bug" | "apprezzamento";
+
+export interface FeedbackRecord {
+  id: string;
+  userId: string;
+  nickname: string;
+  category: FeedbackCategoryRecord;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error("DATABASE_URL mancante nelle variabili d’ambiente.");
@@ -75,6 +88,11 @@ const DEFAULT_OVERRIDES_JSON = JSON.stringify(DEFAULT_SUPERUSER_OVERRIDES);
 function sanitizeEdition(raw: unknown): CardEdition {
   if (raw === "golden_hour" || raw === "night") return raw;
   return "standard";
+}
+
+function sanitizeFeedbackCategory(raw: unknown): FeedbackCategoryRecord {
+  if (raw === "bug" || raw === "apprezzamento") return raw;
+  return "suggerimento";
 }
 
 function sanitizeStoredPhotoUrl(rawUrl: string): string {
@@ -106,6 +124,7 @@ function mapUserRow(r: Record<string, unknown>): UserRecord {
     lastBountyDate: r.last_bounty_date ? String(r.last_bounty_date) : null,
     isSuperuser: Boolean(r.is_superuser),
     superuserOverrides: sanitizeSuperuserOverrides(r.superuser_overrides),
+    onboardingCompleted: r.onboarding_completed !== false,
     createdAt: new Date(String(r.created_at)).toISOString(),
   };
 }
@@ -125,6 +144,7 @@ export async function initDb(): Promise<void> {
       last_bounty_date TEXT,
       is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
       superuser_overrides JSONB NOT NULL DEFAULT '${DEFAULT_OVERRIDES_JSON}'::jsonb,
+      onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
@@ -136,7 +156,8 @@ export async function initDb(): Promise<void> {
       ADD COLUMN IF NOT EXISTS bounty_streak INTEGER NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS last_bounty_date TEXT,
       ADD COLUMN IF NOT EXISTS is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
-      ADD COLUMN IF NOT EXISTS superuser_overrides JSONB NOT NULL DEFAULT '${DEFAULT_OVERRIDES_JSON}'::jsonb;
+      ADD COLUMN IF NOT EXISTS superuser_overrides JSONB NOT NULL DEFAULT '${DEFAULT_OVERRIDES_JSON}'::jsonb,
+      ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE;
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_nickname_lower
       ON users (LOWER(nickname));
@@ -165,6 +186,16 @@ export async function initDb(): Promise<void> {
       unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (user_id, egg_id)
     );
+
+    CREATE TABLE IF NOT EXISTS feedbacks (
+      id UUID PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      nickname TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'suggerimento',
+      message TEXT NOT NULL,
+      is_read BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 }
 
@@ -175,8 +206,8 @@ export async function ensureSuperuser(
   passwordHash: string,
 ): Promise<void> {
   await pool.query(
-    `INSERT INTO users (id, username, nickname, password_hash, avatar_config, equipped_title, is_superuser)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6, TRUE)
+    `INSERT INTO users (id, username, nickname, password_hash, avatar_config, equipped_title, is_superuser, onboarding_completed)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, TRUE, TRUE)
      ON CONFLICT (id)
      DO UPDATE SET
        username = EXCLUDED.username,
@@ -194,7 +225,7 @@ export async function ensureSuperuser(
   );
 }
 
-const USER_COLUMNS = `id, username, nickname, password_hash, avatar_config, equipped_title, prestige, bonus_xp, bounty_streak, last_bounty_date, is_superuser, superuser_overrides, created_at`;
+const USER_COLUMNS = `id, username, nickname, password_hash, avatar_config, equipped_title, prestige, bonus_xp, bounty_streak, last_bounty_date, is_superuser, superuser_overrides, onboarding_completed, created_at`;
 
 export async function findUserByUsername(
   username: string,
@@ -237,9 +268,10 @@ export async function createUser(user: {
   passwordHash: string;
   avatar: AvatarConfig;
 }): Promise<UserRecord> {
+  // I nuovi utenti partono con onboarding_completed = FALSE per mostrare Benvenuto + Tutorial
   const { rows } = await pool.query(
-    `INSERT INTO users (id, username, nickname, password_hash, avatar_config, equipped_title)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+    `INSERT INTO users (id, username, nickname, password_hash, avatar_config, equipped_title, onboarding_completed)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, FALSE)
      RETURNING ${USER_COLUMNS}`,
     [
       user.id,
@@ -251,6 +283,13 @@ export async function createUser(user: {
     ],
   );
   return mapUserRow(rows[0]);
+}
+
+export async function markOnboardingCompleted(userId: string): Promise<void> {
+  await pool.query(
+    `UPDATE users SET onboarding_completed = TRUE WHERE id = $1`,
+    [userId],
+  );
 }
 
 export async function updateUserNickname(
@@ -500,6 +539,63 @@ export async function setAllEasterEggs(
 
 export async function clearAllEasterEggs(userId: string): Promise<void> {
   await pool.query(`DELETE FROM easter_eggs WHERE user_id = $1`, [userId]);
+}
+
+export async function createFeedback(item: {
+  id: string;
+  userId: string;
+  nickname: string;
+  category: FeedbackCategoryRecord;
+  message: string;
+}): Promise<FeedbackRecord> {
+  const { rows } = await pool.query(
+    `INSERT INTO feedbacks (id, user_id, nickname, category, message)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, user_id, nickname, category, message, is_read, created_at`,
+    [item.id, item.userId, item.nickname, item.category, item.message],
+  );
+  const r = rows[0];
+  return {
+    id: String(r.id),
+    userId: String(r.user_id),
+    nickname: String(r.nickname),
+    category: sanitizeFeedbackCategory(r.category),
+    message: String(r.message),
+    isRead: Boolean(r.is_read),
+    createdAt: new Date(String(r.created_at)).toISOString(),
+  };
+}
+
+export async function getAllFeedbacks(): Promise<FeedbackRecord[]> {
+  const { rows } = await pool.query(
+    `SELECT id, user_id, nickname, category, message, is_read, created_at
+     FROM feedbacks
+     ORDER BY is_read ASC, created_at DESC
+     LIMIT 200`,
+  );
+  return rows.map((r) => ({
+    id: String(r.id),
+    userId: String(r.user_id),
+    nickname: String(r.nickname),
+    category: sanitizeFeedbackCategory(r.category),
+    message: String(r.message),
+    isRead: Boolean(r.is_read),
+    createdAt: new Date(String(r.created_at)).toISOString(),
+  }));
+}
+
+export async function setFeedbackRead(
+  feedbackId: string,
+  isRead: boolean,
+): Promise<void> {
+  await pool.query(`UPDATE feedbacks SET is_read = $1 WHERE id = $2`, [
+    isRead,
+    feedbackId,
+  ]);
+}
+
+export async function deleteFeedback(feedbackId: string): Promise<void> {
+  await pool.query(`DELETE FROM feedbacks WHERE id = $1`, [feedbackId]);
 }
 
 export async function getLeaderboardRows(): Promise<LeaderboardRow[]> {

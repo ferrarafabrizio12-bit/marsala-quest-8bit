@@ -5,23 +5,29 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import {
+  type FeedbackCategoryRecord,
   activateUserPrestige,
   addEasterEgg,
   claimDailyBountyReward,
   clearAllEasterEggs,
+  createFeedback,
   createUser,
   deleteAllUnlocks,
+  deleteFeedback,
   deleteUnlock,
   ensureSuperuser,
   findUserById,
   findUserByUsername,
+  getAllFeedbacks,
   getLeaderboardRows,
   getUserEasterEggs,
   getUserUnlocks,
   initDb,
   isNicknameTaken,
+  markOnboardingCompleted,
   removeEasterEgg,
   setAllEasterEggs,
+  setFeedbackRead,
   updateSuperuserOverrides,
   updateUserAvatar,
   updateUserNickname,
@@ -147,6 +153,7 @@ function serializeUser(u: UserRecord) {
     lastBountyDate: u.lastBountyDate,
     isSuperuser: u.isSuperuser,
     superuserOverrides: u.superuserOverrides,
+    onboardingCompleted: u.onboardingCompleted,
   };
 }
 
@@ -387,6 +394,20 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Errore interno durante il login." });
   }
 });
+
+app.patch(
+  "/api/auth/onboarding-complete",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      await markOnboardingCompleted(req.userId!);
+      res.json({ onboardingCompleted: true });
+    } catch (err) {
+      console.error("[ONBOARDING COMPLETE ERROR]", err);
+      res.status(500).json({ error: "Errore salvataggio stato tutorial." });
+    }
+  },
+);
 
 app.get(
   "/api/progress",
@@ -940,6 +961,117 @@ app.post(
     } catch (err) {
       console.error("[ADMIN EASTER EGG ERROR]", err);
       res.status(500).json({ error: "Errore gestione segreti Superuser." });
+    }
+  },
+);
+
+// --- FEEDBACK UTENTI (Scrittura per tutti, Lettura/Gestione solo Superuser) ---
+app.post(
+  "/api/feedback",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const user = await findUserById(req.userId!);
+      if (!user) {
+        res.status(404).json({ error: "Utente non trovato." });
+        return;
+      }
+
+      const { category, message } = req.body as {
+        category?: string;
+        message?: string;
+      };
+      const cleanMsg = (message || "").trim();
+      if (cleanMsg.length < 5) {
+        res
+          .status(400)
+          .json({ error: "Scrivi almeno 5 caratteri per il tuo feedback." });
+        return;
+      }
+      if (cleanMsg.length > 1000) {
+        res.status(400).json({ error: "Massimo 1000 caratteri per feedback." });
+        return;
+      }
+
+      const validCategory: FeedbackCategoryRecord =
+        category === "bug" || category === "apprezzamento"
+          ? category
+          : "suggerimento";
+
+      await createFeedback({
+        id: crypto.randomUUID(),
+        userId: user.id,
+        nickname: user.nickname,
+        category: validCategory,
+        message: cleanMsg,
+      });
+
+      res.status(201).json({ ok: true });
+    } catch (err) {
+      console.error("[CREATE FEEDBACK ERROR]", err);
+      res
+        .status(500)
+        .json({ error: "Errore invio feedback. Riprova tra poco." });
+    }
+  },
+);
+
+app.get(
+  "/api/admin/feedbacks",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const user = await findUserById(req.userId!);
+      if (!user || !user.isSuperuser) {
+        res.status(403).json({ error: "Accesso riservato al Superuser." });
+        return;
+      }
+      const feedbacks = await getAllFeedbacks();
+      res.json({ feedbacks });
+    } catch (err) {
+      console.error("[GET FEEDBACKS ERROR]", err);
+      res.status(500).json({ error: "Errore caricamento feedback." });
+    }
+  },
+);
+
+app.patch(
+  "/api/admin/feedbacks/:id/read",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const user = await findUserById(req.userId!);
+      if (!user || !user.isSuperuser) {
+        res.status(403).json({ error: "Accesso riservato al Superuser." });
+        return;
+      }
+      const feedbackId = String(req.params.id || "");
+      const isRead = Boolean((req.body as { isRead?: boolean }).isRead);
+      await setFeedbackRead(feedbackId, isRead);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[UPDATE FEEDBACK READ ERROR]", err);
+      res.status(500).json({ error: "Errore aggiornamento feedback." });
+    }
+  },
+);
+
+app.delete(
+  "/api/admin/feedbacks/:id",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const user = await findUserById(req.userId!);
+      if (!user || !user.isSuperuser) {
+        res.status(403).json({ error: "Accesso riservato al Superuser." });
+        return;
+      }
+      const feedbackId = String(req.params.id || "");
+      await deleteFeedback(feedbackId);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[DELETE FEEDBACK ERROR]", err);
+      res.status(500).json({ error: "Errore eliminazione feedback." });
     }
   },
 );

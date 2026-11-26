@@ -25,6 +25,7 @@ interface HudBarProps {
   gps: RealGpsState;
   onTitleTap: () => void;
   onSkyTap: () => void;
+  onOpenInfo: () => void;
   onRadarTap: () => void;
   onProgressTap: () => void;
   onToggleOnlyMissing: () => void;
@@ -40,6 +41,7 @@ export const HudBar: React.FC<HudBarProps> = ({
   gps,
   onTitleTap,
   onSkyTap,
+  onOpenInfo,
   onRadarTap,
   onProgressTap,
   onToggleOnlyMissing,
@@ -60,8 +62,8 @@ export const HudBar: React.FC<HudBarProps> = ({
 
   return (
     <header className="absolute top-0 left-0 right-0 z-[700] pointer-events-none px-2 safe-top flex flex-col gap-1.5">
-      <div className="nes-box pointer-events-auto px-2 py-1.5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="nes-box pointer-events-auto px-2 py-1.5 flex items-center justify-between gap-1.5">
+        <div className="flex items-center gap-1.5 min-w-0">
           <button
             onClick={onTitleTap}
             className="flex items-center gap-2 text-left focus:outline-none min-w-0"
@@ -104,10 +106,21 @@ export const HudBar: React.FC<HudBarProps> = ({
 
           <button
             onClick={onSkyTap}
-            className="nes-btn w-9 h-9 bg-[#26335c] flex items-center justify-center text-base shrink-0"
+            className="nes-btn w-8 h-8 sm:w-9 sm:h-9 bg-[#26335c] flex items-center justify-center text-sm sm:text-base shrink-0"
             title="Cielo di Marsala"
           >
             🌅
+          </button>
+
+          <button
+            onClick={() => {
+              sound8bit.click();
+              onOpenInfo();
+            }}
+            className="nes-btn w-8 h-8 sm:w-9 sm:h-9 bg-[#1e293b] text-[#4cc9f0] flex items-center justify-center text-sm sm:text-base shrink-0"
+            title="Feedback & About Me"
+          >
+            ℹ️
           </button>
         </div>
 
@@ -488,7 +501,6 @@ export const DexModal: React.FC<DexModalProps> = ({
 
         {tab === "pois" ? (
           <>
-            {/* Barra Superuser massiva per Card e Territori */}
             {isSuperuser && (
               <div className="grid grid-cols-2 gap-1.5 mb-2">
                 <button
@@ -532,7 +544,6 @@ export const DexModal: React.FC<DexModalProps> = ({
               </div>
             )}
 
-            {/* Box Obiettivo del Giorno */}
             {dailyBounty && bountyPoi && (
               <button
                 type="button"
@@ -567,7 +578,6 @@ export const DexModal: React.FC<DexModalProps> = ({
               className="w-full mb-2 bg-[#090d18] border-[3px] border-[#4cc9f0] px-3 py-1.5 text-xl text-white outline-none focus:border-[#ffd166]"
             />
 
-            {/* Filtri permanenti: Più vicini + Solo mancanti (sincronizzato con la mappa) */}
             <div className="grid grid-cols-2 gap-1.5 mb-2.5">
               <button
                 type="button"
@@ -670,7 +680,6 @@ export const DexModal: React.FC<DexModalProps> = ({
                       )}
                     </button>
 
-                    {/* Controllo Superuser rapido sulla singola Card */}
                     {isSuperuser && (
                       <div className="mt-2 pt-2 border-t border-white/10">
                         {u ? (
@@ -723,7 +732,6 @@ export const DexModal: React.FC<DexModalProps> = ({
           </>
         ) : (
           <div className="flex flex-col flex-1 min-h-0">
-            {/* Barra Superuser massiva per tutti i Segreti */}
             {isSuperuser && onAdminEasterEgg && (
               <div className="grid grid-cols-2 gap-1.5 mb-2.5 shrink-0">
                 <button

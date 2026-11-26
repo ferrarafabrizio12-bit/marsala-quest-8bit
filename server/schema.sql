@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
   last_bounty_date TEXT,
   is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
   superuser_overrides JSONB NOT NULL DEFAULT '{"unlockedCosmetics":[],"lockedCosmetics":[],"unlockedTitles":[],"lockedTitles":[]}'::jsonb,
+  onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -36,4 +37,14 @@ CREATE TABLE IF NOT EXISTS easter_eggs (
   egg_id TEXT NOT NULL,
   unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, egg_id)
+);
+
+CREATE TABLE IF NOT EXISTS feedbacks (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  nickname TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'suggerimento',
+  message TEXT NOT NULL,
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

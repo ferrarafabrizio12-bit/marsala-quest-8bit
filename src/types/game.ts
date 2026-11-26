@@ -12,6 +12,7 @@ export interface UserProfile {
   lastBountyDate: string | null;
   isSuperuser?: boolean;
   superuserOverrides?: SuperuserOverrides;
+  onboardingCompleted?: boolean;
 }
 
 export interface UnlockData {
@@ -43,6 +44,18 @@ export interface LeaderboardEntry {
   percent: number;
   easterEggCount: number;
   totalXp: number;
+}
+
+export type FeedbackCategory = "suggerimento" | "bug" | "apprezzamento";
+
+export interface FeedbackItem {
+  id: string;
+  userId: string;
+  nickname: string;
+  category: FeedbackCategory;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
 }
 
 export type RetroTheme = "default" | "gameboy" | "sunset" | "night";
