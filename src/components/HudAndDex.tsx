@@ -5,7 +5,11 @@ import {
   type PoiDefinition,
   haversineMeters,
 } from "../../shared/pois";
-import { getTitleById } from "../../shared/cosmetics";
+import {
+  MAX_PRESTIGE,
+  getTitleById,
+  hasCompletedMaxPrestige,
+} from "../../shared/cosmetics";
 import type { RealGpsState } from "../hooks/useRealGps";
 import type {
   DailyBountyInfo,
@@ -52,6 +56,10 @@ export const HudBar: React.FC<HudBarProps> = ({
     ? MARSALA_POIS.find((p) => p.id === dailyBounty.poiId)
     : undefined;
   const userTitle = getTitleById(user.title);
+  const isMaxPrestigeDone = hasCompletedMaxPrestige(
+    user.prestige,
+    unlockedCount,
+  );
 
   const gpsColor =
     gps.status === "LOCKED"
@@ -80,13 +88,21 @@ export const HudBar: React.FC<HudBarProps> = ({
                   {user.nickname}
                 </span>
                 {user.isSuperuser && (
-                  <span className="bg-[#dc2626] border border-[#ffd166] px-1 font-pixel text-[7px] text-white shrink-0">
-                    ⚡SU
+                  <span className="bg-[#9f1239] border border-[#ffd166] px-1 font-pixel text-[7px] text-[#ffd166] shrink-0">
+                    👑⚡SU
                   </span>
                 )}
                 {user.prestige > 0 && (
-                  <span className="bg-[#a21caf] border border-[#f0abfc] px-1 font-pixel text-[7px] text-white shrink-0">
-                    ★P{user.prestige}
+                  <span
+                    className={`border px-1 font-pixel text-[7px] shrink-0 ${
+                      isMaxPrestigeDone
+                        ? "bg-[#0284c7] border-[#7dd3fc] text-white"
+                        : "bg-[#a21caf] border-[#f0abfc] text-white"
+                    }`}
+                  >
+                    {isMaxPrestigeDone
+                      ? `⚜️P${user.prestige}`
+                      : `★P${user.prestige}`}
                   </span>
                 )}
               </div>
@@ -150,7 +166,11 @@ export const HudBar: React.FC<HudBarProps> = ({
         <div className="flex-1 h-2.5 bg-[#090d18] border-2 border-[#f4f1de]">
           <div
             className={`h-full transition-all duration-700 ${
-              user.prestige > 0 ? "bg-[#e879f9]" : "bg-[#38e54d]"
+              isMaxPrestigeDone
+                ? "bg-[#38bdf8]"
+                : user.prestige > 0
+                  ? "bg-[#e879f9]"
+                  : "bg-[#38e54d]"
             }`}
             style={{
               width: `${percent}%`,
@@ -229,6 +249,7 @@ interface BottomDockProps {
   topSlot?: React.ReactNode;
   unlockedCount: number;
   prestige: number;
+  isSuperuser?: boolean;
   isCompleted: boolean;
   crtEnabled: boolean;
   muted: boolean;
@@ -246,6 +267,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
   topSlot,
   unlockedCount,
   prestige,
+  isSuperuser = false,
   isCompleted,
   crtEnabled,
   muted,
@@ -257,102 +279,118 @@ export const BottomDock: React.FC<BottomDockProps> = ({
   onToggleCrt,
   onToggleMute,
   onLogout,
-}) => (
-  <nav className="fixed bottom-0 left-0 right-0 z-[700] pointer-events-none px-2 safe-bottom">
-    <div className="w-full max-w-xl mx-auto pointer-events-auto flex flex-col gap-1.5">
-      {topSlot}
+}) => {
+  const isMaxPrestigeDone = hasCompletedMaxPrestige(prestige, unlockedCount);
+  const canActivatePrestige = isCompleted && prestige < MAX_PRESTIGE;
+  const showMedalRow = isSuperuser || isCompleted || prestige > 0;
 
-      {(isCompleted || prestige > 0) && (
-        <div className="flex gap-1.5">
-          <button
-            onClick={() => {
-              sound8bit.victoryMedal();
-              onOpenMedal();
-            }}
-            className="nes-btn flex-1 py-2 bg-[#ffd166] text-black text-[8px]"
-          >
-            🏅 MEDAGLIA LILIBEO
-          </button>
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-[700] pointer-events-none px-2 safe-bottom">
+      <div className="w-full max-w-xl mx-auto pointer-events-auto flex flex-col gap-1.5">
+        {topSlot}
 
-          {isCompleted && (
+        {showMedalRow && (
+          <div className="flex gap-1.5">
             <button
               onClick={() => {
-                sound8bit.easterEgg();
-                onOpenPrestigeConfirm();
+                sound8bit.victoryMedal();
+                onOpenMedal();
               }}
-              className="nes-btn flex-1 py-2 bg-[#c026d3] text-white text-[8px]"
+              className={`nes-btn flex-1 py-2 text-[8px] ${
+                isSuperuser
+                  ? "bg-[#9f1239] text-[#ffd166]"
+                  : isMaxPrestigeDone
+                    ? "bg-[#38bdf8] text-black"
+                    : "bg-[#ffd166] text-black"
+              }`}
             >
-              ⚡ NEW GAME+ (★P{prestige + 1})
+              {isSuperuser
+                ? "👑 MEDAGLIA CREATORE"
+                : isMaxPrestigeDone
+                  ? `⚜️ MEDAGLIA ★${MAX_PRESTIGE} MAX`
+                  : "🏅 MEDAGLIA LILIBEO"}
             </button>
-          )}
+
+            {canActivatePrestige && (
+              <button
+                onClick={() => {
+                  sound8bit.easterEgg();
+                  onOpenPrestigeConfirm();
+                }}
+                className="nes-btn flex-1 py-2 bg-[#c026d3] text-white text-[8px]"
+              >
+                ⚡ NEW GAME+ (★P{prestige + 1}/{MAX_PRESTIGE})
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="nes-box w-full box-border py-1.5 pl-1.5 pr-[9px] grid grid-cols-6 gap-1.5">
+          <button
+            onClick={() => {
+              sound8bit.click();
+              onOpenDex();
+            }}
+            className="nes-btn min-h-[48px] bg-[#ffd166] text-black flex flex-col items-center justify-center gap-0.5"
+          >
+            <span className="text-sm leading-none">📖</span>
+            <span className="text-[6px]">DEX {unlockedCount}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              sound8bit.click();
+              onOpenWardrobe();
+            }}
+            className="nes-btn min-h-[48px] bg-[#a855f7] text-white flex flex-col items-center justify-center gap-0.5"
+          >
+            <span className="text-sm leading-none">👕</span>
+            <span className="text-[6px]">LOOK</span>
+          </button>
+
+          <button
+            onClick={() => {
+              sound8bit.click();
+              onOpenLeaderboard();
+            }}
+            className="nes-btn min-h-[48px] bg-[#4cc9f0] text-black flex flex-col items-center justify-center gap-0.5"
+          >
+            <span className="text-sm leading-none">🏆</span>
+            <span className="text-[6px]">TOP</span>
+          </button>
+
+          <button
+            onClick={onToggleMute}
+            className="nes-btn min-h-[48px] bg-[#26335c] text-white flex flex-col items-center justify-center gap-0.5"
+          >
+            <span className="text-sm leading-none">{muted ? "🔇" : "🔊"}</span>
+            <span className="text-[6px]">AUDIO</span>
+          </button>
+
+          <button
+            onClick={onToggleCrt}
+            className={`nes-btn min-h-[48px] flex flex-col items-center justify-center gap-0.5 ${
+              crtEnabled
+                ? "bg-[#38e54d] text-black"
+                : "bg-[#26335c] text-slate-300"
+            }`}
+          >
+            <span className="text-sm leading-none">📺</span>
+            <span className="text-[6px]">CRT</span>
+          </button>
+
+          <button
+            onClick={onLogout}
+            className="nes-btn min-h-[48px] bg-[#ff4d6d] text-white flex flex-col items-center justify-center gap-0.5"
+          >
+            <span className="text-sm leading-none">🚪</span>
+            <span className="text-[6px]">EXIT</span>
+          </button>
         </div>
-      )}
-
-      <div className="nes-box w-full box-border py-1.5 pl-1.5 pr-[9px] grid grid-cols-6 gap-1.5">
-        <button
-          onClick={() => {
-            sound8bit.click();
-            onOpenDex();
-          }}
-          className="nes-btn min-h-[48px] bg-[#ffd166] text-black flex flex-col items-center justify-center gap-0.5"
-        >
-          <span className="text-sm leading-none">📖</span>
-          <span className="text-[6px]">DEX {unlockedCount}</span>
-        </button>
-
-        <button
-          onClick={() => {
-            sound8bit.click();
-            onOpenWardrobe();
-          }}
-          className="nes-btn min-h-[48px] bg-[#a855f7] text-white flex flex-col items-center justify-center gap-0.5"
-        >
-          <span className="text-sm leading-none">👕</span>
-          <span className="text-[6px]">LOOK</span>
-        </button>
-
-        <button
-          onClick={() => {
-            sound8bit.click();
-            onOpenLeaderboard();
-          }}
-          className="nes-btn min-h-[48px] bg-[#4cc9f0] text-black flex flex-col items-center justify-center gap-0.5"
-        >
-          <span className="text-sm leading-none">🏆</span>
-          <span className="text-[6px]">TOP</span>
-        </button>
-
-        <button
-          onClick={onToggleMute}
-          className="nes-btn min-h-[48px] bg-[#26335c] text-white flex flex-col items-center justify-center gap-0.5"
-        >
-          <span className="text-sm leading-none">{muted ? "🔇" : "🔊"}</span>
-          <span className="text-[6px]">AUDIO</span>
-        </button>
-
-        <button
-          onClick={onToggleCrt}
-          className={`nes-btn min-h-[48px] flex flex-col items-center justify-center gap-0.5 ${
-            crtEnabled
-              ? "bg-[#38e54d] text-black"
-              : "bg-[#26335c] text-slate-300"
-          }`}
-        >
-          <span className="text-sm leading-none">📺</span>
-          <span className="text-[6px]">CRT</span>
-        </button>
-
-        <button
-          onClick={onLogout}
-          className="nes-btn min-h-[48px] bg-[#ff4d6d] text-white flex flex-col items-center justify-center gap-0.5"
-        >
-          <span className="text-sm leading-none">🚪</span>
-          <span className="text-[6px]">EXIT</span>
-        </button>
       </div>
-    </div>
-  </nav>
-);
+    </nav>
+  );
+};
 
 interface DexModalProps {
   isSuperuser?: boolean;
@@ -865,34 +903,70 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
       <div className="overflow-y-auto space-y-2">
         {entries.map((e, i) => {
           const titleObj = getTitleById(e.title);
+          const isMaxPrestigeEntry = hasCompletedMaxPrestige(
+            e.prestige,
+            e.unlockedCount,
+          );
+          const isMe = e.nickname === currentNickname;
+
+          const rowStyle = e.isSuperuser
+            ? "border-[#ff0054] bg-[#2a0a18]"
+            : isMe
+              ? "border-[#ffd166] bg-[#2c2142]"
+              : isMaxPrestigeEntry
+                ? "border-[#38bdf8] bg-[#0f2238]"
+                : "border-[#2e3d6b] bg-[#0d1324]";
+
           return (
             <div
               key={e.nickname}
-              className={`flex items-center justify-between p-2 border-[3px] text-xl gap-2 ${
-                e.nickname === currentNickname
-                  ? "border-[#ffd166] bg-[#2c2142]"
-                  : "border-[#2e3d6b] bg-[#0d1324]"
-              }`}
+              className={`flex items-center justify-between p-2 border-[3px] text-xl gap-2 ${rowStyle}`}
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span className="font-pixel text-[9px] text-[#4cc9f0] shrink-0">
                   #{i + 1}
                 </span>
-                <div className="w-9 h-11 bg-[#141b33] border-2 border-black flex items-center justify-center shrink-0">
+                <div
+                  className={`w-9 h-11 bg-[#141b33] border-2 flex items-center justify-center shrink-0 ${
+                    e.isSuperuser ? "border-[#ffd166]" : "border-black"
+                  }`}
+                >
                   <PixelAvatar avatar={e.avatar} size={26} />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-bold truncate leading-none">
                       {e.nickname}
                     </span>
-                    {e.prestige > 0 && (
-                      <span className="bg-[#a21caf] px-1 font-pixel text-[7px] text-white shrink-0">
-                        ★P{e.prestige}
+                    {e.isSuperuser ? (
+                      <span className="bg-[#9f1239] border border-[#ffd166] px-1.5 py-0.5 font-pixel text-[6px] text-[#ffd166] shrink-0">
+                        👑⚡ SUPREME
                       </span>
+                    ) : (
+                      e.prestige > 0 && (
+                        <span
+                          className={`px-1 font-pixel text-[7px] text-white shrink-0 ${
+                            isMaxPrestigeEntry
+                              ? "bg-[#0284c7] border border-[#7dd3fc]"
+                              : "bg-[#a21caf]"
+                          }`}
+                        >
+                          {isMaxPrestigeEntry
+                            ? `⚜️P${e.prestige}`
+                            : `★P${e.prestige}`}
+                        </span>
+                      )
                     )}
                   </div>
-                  <span className="text-[#ffd166] text-base leading-none block truncate">
+                  <span
+                    className={`text-base leading-none block truncate ${
+                      e.isSuperuser
+                        ? "text-[#ff4d6d]"
+                        : isMaxPrestigeEntry
+                          ? "text-[#7dd3fc]"
+                          : "text-[#ffd166]"
+                    }`}
+                  >
                     {titleObj.icon} {titleObj.label}
                   </span>
                   <span className="text-[#94a3b8] text-base leading-none">

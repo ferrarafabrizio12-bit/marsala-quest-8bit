@@ -1,8 +1,75 @@
 export type AvatarGender = "male" | "female";
 export type CosmeticSlot = "hat" | "glasses" | "top" | "bottom";
 
+export type SkinToneId = "light" | "medium" | "tan" | "deep";
+export type HairColorId = "brown" | "black" | "blonde" | "red" | "gray";
+export type HairStyleId = "short" | "spiky" | "curly" | "long" | "bald";
+export type BeardStyleId = "none" | "stubble" | "goatee" | "mustache" | "full";
+
+export const MAX_PRESTIGE = 5;
+export const TOTAL_MARSALA_POIS = 20;
+
+export interface SkinToneOption {
+  id: SkinToneId;
+  label: string;
+  color: string;
+  shade: string;
+}
+
+export interface HairColorOption {
+  id: HairColorId;
+  label: string;
+  color: string;
+  shade: string;
+}
+
+export interface HairStyleOption {
+  id: HairStyleId;
+  label: string;
+}
+
+export interface BeardStyleOption {
+  id: BeardStyleId;
+  label: string;
+}
+
+export const SKIN_TONES: SkinToneOption[] = [
+  { id: "light", label: "Chiara", color: "#f6c29f", shade: "#dc9b72" },
+  { id: "medium", label: "Mediterranea", color: "#e0a376", shade: "#be7d50" },
+  { id: "tan", label: "Ambrata", color: "#b6784b", shade: "#8f5831" },
+  { id: "deep", label: "Scura", color: "#6e4226", shade: "#4c2b16" },
+];
+
+export const HAIR_COLORS: HairColorOption[] = [
+  { id: "brown", label: "Castano", color: "#5c3317", shade: "#3c1f0c" },
+  { id: "black", label: "Nero", color: "#1f2430", shade: "#0d1017" },
+  { id: "blonde", label: "Biondo", color: "#eab308", shade: "#b8860b" },
+  { id: "red", label: "Rosso", color: "#c2410c", shade: "#9a3412" },
+  { id: "gray", label: "Grigio", color: "#cbd5e1", shade: "#94a3b8" },
+];
+
+export const HAIR_STYLES: HairStyleOption[] = [
+  { id: "short", label: "Corti" },
+  { id: "spiky", label: "Ciuffo" },
+  { id: "curly", label: "Ricci" },
+  { id: "long", label: "Lunghi" },
+  { id: "bald", label: "Rasati" },
+];
+
+export const BEARD_STYLES: BeardStyleOption[] = [
+  { id: "none", label: "Nessuna" },
+  { id: "stubble", label: "Corta" },
+  { id: "goatee", label: "Pizzetto" },
+  { id: "mustache", label: "Baffi" },
+  { id: "full", label: "Folta" },
+];
+
 export interface AvatarConfig {
   gender: AvatarGender;
+  skinTone: SkinToneId;
+  hairColor: HairColorId;
+  hairStyle: HairStyleId;
+  beard: BeardStyleId;
   hat: string;
   glasses: string;
   top: string;
@@ -11,6 +78,10 @@ export interface AvatarConfig {
 
 export const DEFAULT_AVATAR: AvatarConfig = {
   gender: "male",
+  skinTone: "light",
+  hairColor: "brown",
+  hairStyle: "short",
+  beard: "none",
   hat: "hat-cap-red",
   glasses: "glasses-none",
   top: "top-explorer",
@@ -21,7 +92,9 @@ export type CosmeticRequirement =
   | { type: "default" }
   | { type: "cards"; count: number }
   | { type: "easter_egg"; eggId: string; eggTitle: string }
-  | { type: "prestige"; level: number };
+  | { type: "prestige"; level: number }
+  | { type: "prestige_complete"; level: number }
+  | { type: "superuser" };
 
 export interface CosmeticItem {
   id: string;
@@ -33,7 +106,7 @@ export interface CosmeticItem {
 }
 
 export const COSMETICS_CATALOG: CosmeticItem[] = [
-  // --- CAPPELLI (8) ---
+  // --- CAPPELLI (8 pubblici + 1 esclusivo SU) ---
   {
     id: "hat-none",
     slot: "hat",
@@ -112,8 +185,17 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     previewColor: "#ffd166",
     requirement: { type: "prestige", level: 1 },
   },
+  {
+    id: "hat-su-crown",
+    slot: "hat",
+    name: "Corona del Creatore ⚡",
+    description:
+      "Corona ossidiana e oro massiccio con gemma cremisi del fondatore.",
+    previewColor: "#ff0054",
+    requirement: { type: "superuser" },
+  },
 
-  // --- OCCHIALI & VISORI (7) ---
+  // --- OCCHIALI & VISORI (7 pubblici + 1 esclusivo SU) ---
   {
     id: "glasses-none",
     slot: "glasses",
@@ -186,8 +268,16 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
       eggTitle: "Modalità Game Boy",
     },
   },
+  {
+    id: "glasses-su-matrix",
+    slot: "glasses",
+    name: "Visore Architetto ⚡",
+    description: "Visore cibernetico cremisi-oro del Creatore Supremo.",
+    previewColor: "#ff0054",
+    requirement: { type: "superuser" },
+  },
 
-  // --- MAGLIE & GIUBBE (8) ---
+  // --- MAGLIE & GIUBBE (9 pubbliche incl. ★5 MAX + 1 esclusiva SU) ---
   {
     id: "top-explorer",
     slot: "top",
@@ -268,8 +358,26 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     previewColor: "#e879f9",
     requirement: { type: "prestige", level: 1 },
   },
+  {
+    id: "top-imperatore-lilibeo",
+    slot: "top",
+    name: "Manto Imperiale ★5",
+    description:
+      "Veste leggendaria oro, cremisi e diamante per chi completa il Prestigio ★5.",
+    previewColor: "#38bdf8",
+    requirement: { type: "prestige_complete", level: MAX_PRESTIGE },
+  },
+  {
+    id: "top-su-architect",
+    slot: "top",
+    name: "Mantello del Creatore ⚡",
+    description:
+      "Corazza ossidiana con mantello cremisi e sigillo fulmine del fondatore.",
+    previewColor: "#ff0054",
+    requirement: { type: "superuser" },
+  },
 
-  // --- PANTALONI & TUNICHE (7) ---
+  // --- PANTALONI & TUNICHE (7 pubblici + 1 esclusivo SU) ---
   {
     id: "bottom-jeans",
     slot: "bottom",
@@ -339,6 +447,15 @@ export const COSMETICS_CATALOG: CosmeticItem[] = [
     previewColor: "#f59e0b",
     requirement: { type: "prestige", level: 1 },
   },
+  {
+    id: "bottom-su-architect",
+    slot: "bottom",
+    name: "Gambali del Creatore ⚡",
+    description:
+      "Gambali ossidiana con finiture cremisi e oro massiccio del fondatore.",
+    previewColor: "#ff0054",
+    requirement: { type: "superuser" },
+  },
 ];
 
 export interface SuperuserOverrides {
@@ -355,11 +472,55 @@ export const DEFAULT_SUPERUSER_OVERRIDES: SuperuserOverrides = {
   lockedTitles: [],
 };
 
+export function hasCompletedMaxPrestige(
+  prestige: number,
+  unlockedCardsCount: number,
+): boolean {
+  return prestige >= MAX_PRESTIGE && unlockedCardsCount >= TOTAL_MARSALA_POIS;
+}
+
+export function isCosmeticVisible(
+  item: CosmeticItem,
+  isSuperuser = false,
+): boolean {
+  if (item.requirement.type === "superuser") return isSuperuser;
+  return true;
+}
+
 export function sanitizeAvatarConfig(raw: unknown): AvatarConfig {
   if (!raw || typeof raw !== "object") {
     return { ...DEFAULT_AVATAR };
   }
   const obj = raw as Record<string, unknown>;
+  const gender: AvatarGender = obj.gender === "female" ? "female" : "male";
+
+  const skinTone: SkinToneId =
+    typeof obj.skinTone === "string" &&
+    SKIN_TONES.some((s) => s.id === obj.skinTone)
+      ? (obj.skinTone as SkinToneId)
+      : DEFAULT_AVATAR.skinTone;
+
+  const hairColor: HairColorId =
+    typeof obj.hairColor === "string" &&
+    HAIR_COLORS.some((c) => c.id === obj.hairColor)
+      ? (obj.hairColor as HairColorId)
+      : DEFAULT_AVATAR.hairColor;
+
+  const defaultStyleForGender: HairStyleId =
+    gender === "female" ? "long" : "short";
+  const hairStyle: HairStyleId =
+    typeof obj.hairStyle === "string" &&
+    HAIR_STYLES.some((h) => h.id === obj.hairStyle)
+      ? (obj.hairStyle as HairStyleId)
+      : defaultStyleForGender;
+
+  const beard: BeardStyleId =
+    gender === "male" &&
+    typeof obj.beard === "string" &&
+    BEARD_STYLES.some((b) => b.id === obj.beard)
+      ? (obj.beard as BeardStyleId)
+      : "none";
+
   const validBySlot = (
     slot: CosmeticSlot,
     id: unknown,
@@ -375,7 +536,11 @@ export function sanitizeAvatarConfig(raw: unknown): AvatarConfig {
   };
 
   return {
-    gender: obj.gender === "female" ? "female" : "male",
+    gender,
+    skinTone,
+    hairColor,
+    hairStyle,
+    beard,
     hat: validBySlot("hat", obj.hat, DEFAULT_AVATAR.hat),
     glasses: validBySlot("glasses", obj.glasses, DEFAULT_AVATAR.glasses),
     top: validBySlot("top", obj.top, DEFAULT_AVATAR.top),
@@ -387,6 +552,10 @@ export function getRequirementLabel(req: CosmeticRequirement): string {
   if (req.type === "default") return "Disponibile subito";
   if (req.type === "cards") return `Sblocca ${req.count} Card`;
   if (req.type === "prestige") return `Attiva Prestigio ★${req.level}`;
+  if (req.type === "prestige_complete") {
+    return `Completa 20/20 al Prestigio ★${req.level}`;
+  }
+  if (req.type === "superuser") return "Esclusiva Creatore Supremo ⚡";
   return `Segreto: ${req.eggTitle}`;
 }
 
@@ -396,15 +565,25 @@ export function isCosmeticUnlocked(
   easterEggs: string[],
   prestige = 0,
   overrides?: SuperuserOverrides,
+  isSuperuser = false,
 ): boolean {
+  if (item.requirement.type === "superuser") {
+    if (!isSuperuser) return false;
+    if (overrides?.lockedCosmetics.includes(item.id)) return false;
+    return true;
+  }
+
   if (overrides?.lockedCosmetics.includes(item.id)) return false;
   if (overrides?.unlockedCosmetics.includes(item.id)) return true;
 
-  const effectiveCards = prestige > 0 ? 20 : unlockedCardsCount;
+  const effectiveCards = prestige > 0 ? TOTAL_MARSALA_POIS : unlockedCardsCount;
   const req = item.requirement;
   if (req.type === "default") return true;
   if (req.type === "cards") return effectiveCards >= req.count;
   if (req.type === "prestige") return prestige >= req.level;
+  if (req.type === "prestige_complete") {
+    return prestige >= req.level && unlockedCardsCount >= TOTAL_MARSALA_POIS;
+  }
   return easterEggs.includes(req.eggId);
 }
 
@@ -413,6 +592,7 @@ export function getUnlockedCosmeticIds(
   easterEggs: string[],
   prestige = 0,
   overrides?: SuperuserOverrides,
+  isSuperuser = false,
 ): string[] {
   return COSMETICS_CATALOG.filter((item) =>
     isCosmeticUnlocked(
@@ -421,6 +601,7 @@ export function getUnlockedCosmeticIds(
       easterEggs,
       prestige,
       overrides,
+      isSuperuser,
     ),
   ).map((item) => item.id);
 }
@@ -431,7 +612,9 @@ export type TitleRequirement =
   | { type: "easter_egg"; eggId: string; eggTitle: string }
   | { type: "streak"; days: number }
   | { type: "edition"; edition: "golden_hour" | "night" }
-  | { type: "prestige"; level: number };
+  | { type: "prestige"; level: number }
+  | { type: "prestige_complete"; level: number }
+  | { type: "superuser" };
 
 export interface PlayerTitle {
   id: string;
@@ -504,7 +687,31 @@ export const PLAYER_TITLES: PlayerTitle[] = [
     description: "Completa tutta la mappa e attiva il Prestigio ★1.",
     requirement: { type: "prestige", level: 1 },
   },
+  {
+    id: "title-immortale",
+    label: "Immortale di Lilibeo ★5",
+    icon: "⚜️",
+    description:
+      "Completa al 100% (20/20) anche il livello massimo di Prestigio ★5.",
+    requirement: { type: "prestige_complete", level: MAX_PRESTIGE },
+  },
+  {
+    id: "title-creator-su",
+    label: "Architetto di Lilibeo",
+    icon: "⚡",
+    description:
+      "Titolo unico e riservato al Creatore Supremo di Marsala Quest 8-Bit.",
+    requirement: { type: "superuser" },
+  },
 ];
+
+export function isTitleVisible(
+  title: PlayerTitle,
+  isSuperuser = false,
+): boolean {
+  if (title.requirement.type === "superuser") return isSuperuser;
+  return true;
+}
 
 export function sanitizeTitleId(raw: unknown): string {
   if (typeof raw === "string" && PLAYER_TITLES.some((t) => t.id === raw)) {
@@ -526,16 +733,29 @@ export function isTitleUnlocked(
     bountyStreak: number;
     editionsOwned: string[];
     overrides?: SuperuserOverrides;
+    isSuperuser?: boolean;
   },
 ): boolean {
+  if (title.requirement.type === "superuser") {
+    if (!ctx.isSuperuser) return false;
+    if (ctx.overrides?.lockedTitles.includes(title.id)) return false;
+    return true;
+  }
+
   if (ctx.overrides?.lockedTitles.includes(title.id)) return false;
   if (ctx.overrides?.unlockedTitles.includes(title.id)) return true;
 
-  const effectiveCards = ctx.prestige > 0 ? 20 : ctx.unlockedCardsCount;
+  const effectiveCards =
+    ctx.prestige > 0 ? TOTAL_MARSALA_POIS : ctx.unlockedCardsCount;
   const req = title.requirement;
   if (req.type === "default") return true;
   if (req.type === "cards") return effectiveCards >= req.count;
   if (req.type === "prestige") return ctx.prestige >= req.level;
+  if (req.type === "prestige_complete") {
+    return (
+      ctx.prestige >= req.level && ctx.unlockedCardsCount >= TOTAL_MARSALA_POIS
+    );
+  }
   if (req.type === "streak") return ctx.bountyStreak >= req.days;
   if (req.type === "edition") return ctx.editionsOwned.includes(req.edition);
   return ctx.easterEggs.includes(req.eggId);
@@ -545,6 +765,10 @@ export function getTitleRequirementLabel(req: TitleRequirement): string {
   if (req.type === "default") return "Disponibile subito";
   if (req.type === "cards") return `Sblocca ${req.count} Card`;
   if (req.type === "prestige") return `Attiva Prestigio ★${req.level}`;
+  if (req.type === "prestige_complete") {
+    return `Completa 20/20 al Prestigio ★${req.level}`;
+  }
+  if (req.type === "superuser") return "Esclusiva Creatore Supremo ⚡";
   if (req.type === "streak") return `Streak Bounty ${req.days} giorni`;
   if (req.type === "edition") {
     return req.edition === "golden_hour"

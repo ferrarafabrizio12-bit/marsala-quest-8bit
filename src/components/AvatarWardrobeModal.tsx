@@ -1,18 +1,25 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   type AvatarConfig,
+  type AvatarGender,
+  BEARD_STYLES,
   COSMETICS_CATALOG,
   type CosmeticSlot,
   DEFAULT_AVATAR,
   DEFAULT_SUPERUSER_OVERRIDES,
   DEFAULT_TITLE_ID,
+  HAIR_COLORS,
+  HAIR_STYLES,
   PLAYER_TITLES,
+  SKIN_TONES,
   type SuperuserOverrides,
   getRequirementLabel,
   getTitleById,
   getTitleRequirementLabel,
   isCosmeticUnlocked,
+  isCosmeticVisible,
   isTitleUnlocked,
+  isTitleVisible,
 } from "../../shared/cosmetics";
 import { sound8bit } from "../utils/sound8bit";
 import { PixelAvatar } from "./PixelAvatar";
@@ -61,7 +68,9 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
   onSaveSuperuserOverrides,
   onClose,
 }) => {
-  const [section, setSection] = useState<"clothes" | "titles">("clothes");
+  const [section, setSection] = useState<"appearance" | "clothes" | "titles">(
+    "clothes",
+  );
   const [draft, setDraft] = useState<AvatarConfig>(avatar);
   const [draftTitle, setDraftTitle] = useState<string>(titleId);
   const [overridesDraft, setOverridesDraft] = useState<SuperuserOverrides>(
@@ -71,9 +80,31 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
   const [saving, setSaving] = useState(false);
 
   const previewTitle = getTitleById(draftTitle);
-  const slotItems = COSMETICS_CATALOG.filter(
-    (item) => item.slot === activeSlot,
+
+  const visibleCosmetics = useMemo(
+    () =>
+      COSMETICS_CATALOG.filter((item) => isCosmeticVisible(item, isSuperuser)),
+    [isSuperuser],
   );
+
+  const visibleTitles = useMemo(
+    () => PLAYER_TITLES.filter((t) => isTitleVisible(t, isSuperuser)),
+    [isSuperuser],
+  );
+
+  const slotItems = useMemo(
+    () => visibleCosmetics.filter((item) => item.slot === activeSlot),
+    [visibleCosmetics, activeSlot],
+  );
+
+  const handleGenderChange = (nextGender: AvatarGender) => {
+    sound8bit.click();
+    setDraft((d) => ({
+      ...d,
+      gender: nextGender,
+      beard: nextGender === "female" ? "none" : d.beard,
+    }));
+  };
 
   const toggleCosmeticOverride = (
     itemId: string,
@@ -83,7 +114,6 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
     sound8bit.click();
     setOverridesDraft((prev) => {
       if (currentlyUnlocked) {
-        // Blocca indumento e rimuovilo se indossato
         if (draft[slot] === itemId) {
           setDraft((d) => ({ ...d, [slot]: DEFAULT_AVATAR[slot] }));
         }
@@ -96,16 +126,14 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
             ? prev.lockedCosmetics
             : [...prev.lockedCosmetics, itemId],
         };
-      } else {
-        // Sblocca indumento
-        return {
-          ...prev,
-          lockedCosmetics: prev.lockedCosmetics.filter((id) => id !== itemId),
-          unlockedCosmetics: prev.unlockedCosmetics.includes(itemId)
-            ? prev.unlockedCosmetics
-            : [...prev.unlockedCosmetics, itemId],
-        };
       }
+      return {
+        ...prev,
+        lockedCosmetics: prev.lockedCosmetics.filter((id) => id !== itemId),
+        unlockedCosmetics: prev.unlockedCosmetics.includes(itemId)
+          ? prev.unlockedCosmetics
+          : [...prev.unlockedCosmetics, itemId],
+      };
     });
   };
 
@@ -123,52 +151,89 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
             ? prev.lockedTitles
             : [...prev.lockedTitles, tId],
         };
-      } else {
-        return {
-          ...prev,
-          lockedTitles: prev.lockedTitles.filter((id) => id !== tId),
-          unlockedTitles: prev.unlockedTitles.includes(tId)
-            ? prev.unlockedTitles
-            : [...prev.unlockedTitles, tId],
-        };
       }
+      return {
+        ...prev,
+        lockedTitles: prev.lockedTitles.filter((id) => id !== tId),
+        unlockedTitles: prev.unlockedTitles.includes(tId)
+          ? prev.unlockedTitles
+          : [...prev.unlockedTitles, tId],
+      };
     });
   };
 
   const handleUnlockAllCosmeticsAndTitles = () => {
     sound8bit.click();
     setOverridesDraft({
-      unlockedCosmetics: COSMETICS_CATALOG.map((c) => c.id),
+      unlockedCosmetics: visibleCosmetics.map((c) => c.id),
       lockedCosmetics: [],
-      unlockedTitles: PLAYER_TITLES.map((t) => t.id),
+      unlockedTitles: visibleTitles.map((t) => t.id),
       lockedTitles: [],
     });
   };
 
   const handleLockAllCosmeticsAndTitles = () => {
     sound8bit.click();
-    setDraft({ ...DEFAULT_AVATAR, gender: draft.gender });
+    setDraft((d) => ({
+      ...DEFAULT_AVATAR,
+      gender: d.gender,
+      skinTone: d.skinTone,
+      hairColor: d.hairColor,
+      hairStyle: d.hairStyle,
+      beard: d.gender === "male" ? d.beard : "none",
+    }));
     setDraftTitle(DEFAULT_TITLE_ID);
     setOverridesDraft({
       unlockedCosmetics: [],
-      lockedCosmetics: COSMETICS_CATALOG.filter(
-        (c) => c.requirement.type !== "default",
-      ).map((c) => c.id),
+      lockedCosmetics: visibleCosmetics
+        .filter((c) => c.requirement.type !== "default")
+        .map((c) => c.id),
       unlockedTitles: [],
-      lockedTitles: PLAYER_TITLES.filter(
-        (t) => t.requirement.type !== "default",
-      ).map((t) => t.id),
+      lockedTitles: visibleTitles
+        .filter((t) => t.requirement.type !== "default")
+        .map((t) => t.id),
     });
+  };
+
+  const handleEquipFullCreatorSet = () => {
+    sound8bit.easterEgg();
+    setOverridesDraft((prev) => ({
+      ...prev,
+      lockedCosmetics: prev.lockedCosmetics.filter(
+        (id) =>
+          id !== "hat-su-crown" &&
+          id !== "glasses-su-matrix" &&
+          id !== "top-su-architect" &&
+          id !== "bottom-su-architect",
+      ),
+      lockedTitles: prev.lockedTitles.filter((id) => id !== "title-creator-su"),
+    }));
+    setDraft((d) => ({
+      ...d,
+      hat: "hat-su-crown",
+      glasses: "glasses-su-matrix",
+      top: "top-su-architect",
+      bottom: "bottom-su-architect",
+    }));
+    setDraftTitle("title-creator-su");
   };
 
   const handleSaveAll = async () => {
     sound8bit.click();
     setSaving(true);
     try {
+      const normalizedDraft: AvatarConfig = {
+        ...draft,
+        beard: draft.gender === "male" ? draft.beard : "none",
+      };
       if (isSuperuser && onSaveSuperuserOverrides) {
-        await onSaveSuperuserOverrides(overridesDraft, draft, draftTitle);
+        await onSaveSuperuserOverrides(
+          overridesDraft,
+          normalizedDraft,
+          draftTitle,
+        );
       } else {
-        await onSave(draft);
+        await onSave(normalizedDraft);
         if (draftTitle !== titleId) {
           await onSaveTitle(draftTitle);
         }
@@ -181,11 +246,11 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[1050] bg-black/85 flex items-end sm:items-center justify-center sm:p-3">
-      <div className="nes-box-gold w-full sm:max-w-lg max-h-[88dvh] flex flex-col p-4 safe-bottom">
+      <div className="nes-box-gold w-full sm:max-w-lg max-h-[90dvh] flex flex-col p-4 safe-bottom">
         {/* Header */}
         <div className="flex justify-between items-center border-b-[3px] border-[#2e3d6b] pb-2.5 mb-3">
           <h3 className="font-pixel text-[10px] sm:text-xs text-[#ffd166]">
-            👕 ARMADIO &amp; TITOLI
+            👕 ARMADIO &amp; ASPETTO
           </h3>
           <button
             onClick={onClose}
@@ -202,19 +267,23 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
               <PixelAvatar avatar={draft} size={52} />
             </div>
             <div className="min-w-0">
-              <p className="font-pixel text-[10px] text-white truncate">
-                {nickname}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="font-pixel text-[10px] text-white truncate">
+                  {nickname}
+                </p>
+                {isSuperuser && (
+                  <span className="bg-[#9f1239] border border-[#ffd166] px-1 font-pixel text-[6px] text-[#ffd166] shrink-0">
+                    👑⚡ SUPREME
+                  </span>
+                )}
+              </div>
               <p className="text-lg text-[#ffd166] leading-tight truncate">
                 {previewTitle.icon} {previewTitle.label}
               </p>
               <div className="flex gap-1.5 mt-1">
                 <button
                   type="button"
-                  onClick={() => {
-                    sound8bit.click();
-                    setDraft((d) => ({ ...d, gender: "male" }));
-                  }}
+                  onClick={() => handleGenderChange("male")}
                   className={`nes-btn px-2 py-1 text-[7px] ${
                     draft.gender === "male"
                       ? "bg-[#4cc9f0] text-black"
@@ -225,10 +294,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    sound8bit.click();
-                    setDraft((d) => ({ ...d, gender: "female" }));
-                  }}
+                  onClick={() => handleGenderChange("female")}
                   className={`nes-btn px-2 py-1 text-[7px] ${
                     draft.gender === "female"
                       ? "bg-[#f472b6] text-black"
@@ -244,33 +310,56 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
 
         {/* Barra controlli rapidi Superuser */}
         {isSuperuser && (
-          <div className="grid grid-cols-2 gap-1.5 mb-2.5">
+          <div className="space-y-1.5 mb-2.5">
             <button
               type="button"
-              onClick={handleUnlockAllCosmeticsAndTitles}
-              className="nes-btn py-1.5 bg-[#c026d3] text-white text-[7px]"
+              onClick={handleEquipFullCreatorSet}
+              className="nes-btn w-full py-1.5 bg-[#9f1239] text-[#ffd166] text-[7px] border-[#ffd166]"
             >
-              ⚡ SBLOCCA TUTTI I LOOK/TITOLI
+              👑⚡ INDOSSA SET COMPLETO DEL CREATORE + TITOLO
             </button>
-            <button
-              type="button"
-              onClick={handleLockAllCosmeticsAndTitles}
-              className="nes-btn py-1.5 bg-[#be123c] text-white text-[7px]"
-            >
-              🔒 BLOCCA EXTRA (ROLLBACK)
-            </button>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={handleUnlockAllCosmeticsAndTitles}
+                className="nes-btn py-1.5 bg-[#c026d3] text-white text-[7px]"
+              >
+                ⚡ SBLOCCA TUTTI I LOOK/TITOLI
+              </button>
+              <button
+                type="button"
+                onClick={handleLockAllCosmeticsAndTitles}
+                className="nes-btn py-1.5 bg-[#be123c] text-white text-[7px]"
+              >
+                🔒 BLOCCA EXTRA (ROLLBACK)
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Selettore Sezione: VESTITI vs TITOLI */}
-        <div className="grid grid-cols-2 gap-1.5 mb-3">
+        {/* Selettore Sezione: ASPETTO vs VESTITI vs TITOLI */}
+        <div className="grid grid-cols-3 gap-1.5 mb-3">
+          <button
+            type="button"
+            onClick={() => {
+              sound8bit.click();
+              setSection("appearance");
+            }}
+            className={`nes-btn py-2 text-[7px] sm:text-[8px] ${
+              section === "appearance"
+                ? "bg-[#4cc9f0] text-black"
+                : "bg-[#26335c] text-slate-300"
+            }`}
+          >
+            🧑 ASPETTO
+          </button>
           <button
             type="button"
             onClick={() => {
               sound8bit.click();
               setSection("clothes");
             }}
-            className={`nes-btn py-2 text-[8px] ${
+            className={`nes-btn py-2 text-[7px] sm:text-[8px] ${
               section === "clothes"
                 ? "bg-[#a855f7] text-white"
                 : "bg-[#26335c] text-slate-300"
@@ -284,17 +373,160 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
               sound8bit.click();
               setSection("titles");
             }}
-            className={`nes-btn py-2 text-[8px] ${
+            className={`nes-btn py-2 text-[7px] sm:text-[8px] ${
               section === "titles"
                 ? "bg-[#ffd166] text-black"
                 : "bg-[#26335c] text-slate-300"
             }`}
           >
-            🏷️ TITOLI ({PLAYER_TITLES.length})
+            🏷️ TITOLI
           </button>
         </div>
 
-        {section === "clothes" ? (
+        {/* SEZIONE 1: ASPETTO BASE (sempre libero, senza achievement) */}
+        {section === "appearance" && (
+          <div className="overflow-y-auto space-y-3 pr-1 flex-1">
+            {draft.hat !== "hat-none" && (
+              <div className="bg-[#141b33] border-2 border-[#ffd166] p-2 flex items-center justify-between gap-2">
+                <span className="text-lg text-[#fde68a] leading-tight">
+                  Stai indossando un cappello: toglilo per vedere bene il taglio
+                  di capelli!
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound8bit.click();
+                    setDraft((d) => ({ ...d, hat: "hat-none" }));
+                  }}
+                  className="nes-btn px-2 py-1 bg-[#ffd166] text-black text-[7px] shrink-0"
+                >
+                  TOGLI
+                </button>
+              </div>
+            )}
+
+            {/* Carnagione */}
+            <div className="bg-[#090d18] border-[3px] border-[#2e3d6b] p-2.5">
+              <p className="font-pixel text-[8px] text-[#ffd166] mb-2">
+                CARNAGIONE
+              </p>
+              <div className="grid grid-cols-4 gap-1.5">
+                {SKIN_TONES.map((tone) => (
+                  <button
+                    key={tone.id}
+                    type="button"
+                    onClick={() => {
+                      sound8bit.click();
+                      setDraft((d) => ({ ...d, skinTone: tone.id }));
+                    }}
+                    className={`border-2 py-2 px-1 flex flex-col items-center gap-1 transition ${
+                      draft.skinTone === tone.id
+                        ? "border-[#38e54d] bg-[#102a1d]"
+                        : "border-[#2e3d6b] bg-[#141b33]"
+                    }`}
+                  >
+                    <span
+                      className="w-6 h-6 border-2 border-black"
+                      style={{ backgroundColor: tone.color }}
+                    />
+                    <span className="text-base text-white leading-none">
+                      {tone.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Colore capelli */}
+            <div className="bg-[#090d18] border-[3px] border-[#2e3d6b] p-2.5">
+              <p className="font-pixel text-[8px] text-[#ffd166] mb-2">
+                COLORE CAPELLI
+              </p>
+              <div className="grid grid-cols-5 gap-1.5">
+                {HAIR_COLORS.map((hc) => (
+                  <button
+                    key={hc.id}
+                    type="button"
+                    onClick={() => {
+                      sound8bit.click();
+                      setDraft((d) => ({ ...d, hairColor: hc.id }));
+                    }}
+                    className={`border-2 py-1.5 px-1 flex flex-col items-center gap-1 transition ${
+                      draft.hairColor === hc.id
+                        ? "border-[#ffd166] bg-[#2a1f3d]"
+                        : "border-[#2e3d6b] bg-[#141b33]"
+                    }`}
+                  >
+                    <span
+                      className="w-5 h-5 border-2 border-black"
+                      style={{ backgroundColor: hc.color }}
+                    />
+                    <span className="text-sm text-white leading-none">
+                      {hc.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Stile capelli */}
+            <div className="bg-[#090d18] border-[3px] border-[#2e3d6b] p-2.5">
+              <p className="font-pixel text-[8px] text-[#ffd166] mb-2">
+                STILE CAPELLI
+              </p>
+              <div className="grid grid-cols-5 gap-1">
+                {HAIR_STYLES.map((hs) => (
+                  <button
+                    key={hs.id}
+                    type="button"
+                    onClick={() => {
+                      sound8bit.click();
+                      setDraft((d) => ({ ...d, hairStyle: hs.id }));
+                    }}
+                    className={`nes-btn py-2 text-[7px] ${
+                      draft.hairStyle === hs.id
+                        ? "bg-[#ffd166] text-black"
+                        : "bg-[#26335c] text-slate-200"
+                    }`}
+                  >
+                    {hs.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Barba (solo profilo maschile, stesso colore dei capelli) */}
+            {draft.gender === "male" && (
+              <div className="bg-[#090d18] border-[3px] border-[#2e3d6b] p-2.5">
+                <p className="font-pixel text-[8px] text-[#4cc9f0] mb-2">
+                  STILE BARBA (STESSO COLORE CAPELLI)
+                </p>
+                <div className="grid grid-cols-5 gap-1">
+                  {BEARD_STYLES.map((bs) => (
+                    <button
+                      key={bs.id}
+                      type="button"
+                      onClick={() => {
+                        sound8bit.click();
+                        setDraft((d) => ({ ...d, beard: bs.id }));
+                      }}
+                      className={`nes-btn py-2 text-[7px] ${
+                        draft.beard === bs.id
+                          ? "bg-[#4cc9f0] text-black"
+                          : "bg-[#26335c] text-slate-200"
+                      }`}
+                    >
+                      {bs.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SEZIONE 2: VESTITI & ACCESSORI */}
+        {section === "clothes" && (
           <>
             <div className="grid grid-cols-4 gap-1 mb-2.5">
               {SLOTS.map((s) => (
@@ -324,9 +556,14 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                   easterEggs,
                   prestige,
                   overridesDraft,
+                  isSuperuser,
                 );
                 const equipped = draft[activeSlot] === item.id;
                 const isDefaultItem = item.requirement.type === "default";
+                const isCreatorExclusive =
+                  item.requirement.type === "superuser";
+                const isMaxPrestigeReward =
+                  item.requirement.type === "prestige_complete";
 
                 return (
                   <div
@@ -334,9 +571,13 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                     className={`w-full border-[3px] p-2.5 flex items-center justify-between gap-2 ${
                       equipped
                         ? "border-[#38e54d] bg-[#102a1d]"
-                        : unlocked
-                          ? "border-[#2e3d6b] bg-[#0d1324]"
-                          : "border-[#1e293b] bg-[#090d18] opacity-75"
+                        : isCreatorExclusive
+                          ? "border-[#ff0054] bg-[#2a0a18]"
+                          : isMaxPrestigeReward
+                            ? "border-[#38bdf8] bg-[#0f2238]"
+                            : unlocked
+                              ? "border-[#2e3d6b] bg-[#0d1324]"
+                              : "border-[#1e293b] bg-[#090d18] opacity-75"
                     }`}
                   >
                     <button
@@ -353,9 +594,21 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                         style={{ backgroundColor: item.previewColor }}
                       />
                       <div className="min-w-0">
-                        <p className="font-pixel text-[8px] text-[#ffd166] truncate">
-                          {item.name}
-                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-pixel text-[8px] text-[#ffd166] truncate">
+                            {item.name}
+                          </p>
+                          {isCreatorExclusive && (
+                            <span className="bg-[#ff0054] px-1 font-pixel text-[6px] text-white shrink-0">
+                              SU
+                            </span>
+                          )}
+                          {isMaxPrestigeReward && (
+                            <span className="bg-[#0284c7] px-1 font-pixel text-[6px] text-white shrink-0">
+                              ★5 MAX
+                            </span>
+                          )}
+                        </div>
                         <p className="text-lg text-slate-300 leading-tight truncate">
                           {unlocked
                             ? item.description
@@ -394,9 +647,12 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
               })}
             </div>
           </>
-        ) : (
+        )}
+
+        {/* SEZIONE 3: TITOLI */}
+        {section === "titles" && (
           <div className="overflow-y-auto space-y-2 pr-1 flex-1">
-            {PLAYER_TITLES.map((t) => {
+            {visibleTitles.map((t) => {
               const unlocked = isTitleUnlocked(t, {
                 unlockedCardsCount,
                 easterEggs,
@@ -404,9 +660,13 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                 bountyStreak,
                 editionsOwned,
                 overrides: overridesDraft,
+                isSuperuser,
               });
               const equipped = draftTitle === t.id;
               const isDefaultTitle = t.requirement.type === "default";
+              const isCreatorExclusive = t.requirement.type === "superuser";
+              const isMaxPrestigeReward =
+                t.requirement.type === "prestige_complete";
 
               return (
                 <div
@@ -414,9 +674,13 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                   className={`w-full border-[3px] p-2.5 flex items-center justify-between gap-2 ${
                     equipped
                       ? "border-[#ffd166] bg-[#2a1f3d]"
-                      : unlocked
-                        ? "border-[#2e3d6b] bg-[#0d1324]"
-                        : "border-[#1e293b] bg-[#090d18] opacity-75"
+                      : isCreatorExclusive
+                        ? "border-[#ff0054] bg-[#2a0a18]"
+                        : isMaxPrestigeReward
+                          ? "border-[#38bdf8] bg-[#0f2238]"
+                          : unlocked
+                            ? "border-[#2e3d6b] bg-[#0d1324]"
+                            : "border-[#1e293b] bg-[#090d18] opacity-75"
                   }`}
                 >
                   <button
@@ -428,9 +692,21 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
                     }}
                     className="min-w-0 flex-1 text-left"
                   >
-                    <p className="font-pixel text-[8px] text-[#ffd166] truncate">
-                      {t.icon} {t.label}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-pixel text-[8px] text-[#ffd166] truncate">
+                        {t.icon} {t.label}
+                      </p>
+                      {isCreatorExclusive && (
+                        <span className="bg-[#ff0054] px-1 font-pixel text-[6px] text-white shrink-0">
+                          SU
+                        </span>
+                      )}
+                      {isMaxPrestigeReward && (
+                        <span className="bg-[#0284c7] px-1 font-pixel text-[6px] text-white shrink-0">
+                          ★5 MAX
+                        </span>
+                      )}
+                    </div>
                     <p className="text-lg text-slate-300 leading-tight">
                       {unlocked
                         ? t.description
@@ -469,7 +745,7 @@ export const AvatarWardrobeModal: React.FC<AvatarWardrobeModalProps> = ({
           onClick={() => void handleSaveAll()}
           className="nes-btn w-full py-3 mt-3 bg-[#38e54d] text-black text-[9px]"
         >
-          {saving ? "SALVATAGGIO..." : "💾 SALVA LOOK & TITOLO"}
+          {saving ? "SALVATAGGIO..." : "💾 SALVA ASPETTO, LOOK & TITOLO"}
         </button>
       </div>
     </div>

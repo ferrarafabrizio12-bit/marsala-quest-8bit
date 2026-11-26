@@ -48,6 +48,7 @@ import {
 } from "../shared/pois.js";
 import {
   DEFAULT_AVATAR,
+  MAX_PRESTIGE,
   getTitleById,
   getUnlockedCosmeticIds,
   isTitleUnlocked,
@@ -327,7 +328,6 @@ app.get("/api/map-tile/:z/:x/:yPng", async (req: Request, res: Response) => {
 
       const arrBuf = await upstream.arrayBuffer();
       const buf = Buffer.from(arrBuf);
-      // Accetta anche i tasselli di puro mare (PNG compresso da ~300-1500 byte) pur verificando l'header immagine
       if (!isValidImageBuffer(buf)) continue;
 
       if (tileCache.size >= 500) {
@@ -353,11 +353,24 @@ app.get("/api/health", (_req: Request, res: Response) => {
 
 app.post("/api/auth/register", async (req: Request, res: Response) => {
   try {
-    const { username, nickname, password, gender } = req.body as {
+    const {
+      username,
+      nickname,
+      password,
+      gender,
+      skinTone,
+      hairColor,
+      hairStyle,
+      beard,
+    } = req.body as {
       username?: string;
       nickname?: string;
       password?: string;
       gender?: string;
+      skinTone?: string;
+      hairColor?: string;
+      hairStyle?: string;
+      beard?: string;
     };
 
     const cleanUser = (username || "").trim().toLowerCase();
@@ -388,10 +401,15 @@ app.post("/api/auth/register", async (req: Request, res: Response) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const initialAvatar = {
+    const initialAvatar = sanitizeAvatarConfig({
       ...DEFAULT_AVATAR,
-      gender: gender === "female" ? ("female" as const) : ("male" as const),
-    };
+      gender,
+      skinTone,
+      hairColor,
+      hairStyle,
+      beard,
+      hat: "hat-none",
+    });
 
     const user = await createUser({
       id: crypto.randomUUID(),
@@ -535,6 +553,7 @@ app.patch(
           easterEggs,
           user.prestige,
           user.superuserOverrides,
+          user.isSuperuser,
         ),
       );
 
@@ -592,6 +611,7 @@ app.patch(
         bountyStreak: user.bountyStreak,
         editionsOwned,
         overrides: user.superuserOverrides,
+        isSuperuser: user.isSuperuser,
       });
 
       if (!allowed) {
@@ -662,6 +682,13 @@ app.post(
         return;
       }
 
+      if (user.prestige >= MAX_PRESTIGE) {
+        res.status(400).json({
+          error: `Hai già raggiunto il livello massimo di Prestigio (★P${MAX_PRESTIGE})!`,
+        });
+        return;
+      }
+
       const unlocks = await getUserUnlocks(user.id);
       if (
         !user.isSuperuser &&
@@ -685,9 +712,12 @@ app.post(
       });
     } catch (err) {
       console.error("[PRESTIGE ERROR]", err);
-      res
-        .status(500)
-        .json({ error: "Errore durante l’attivazione del Prestigio." });
+      res.status(500).json({
+        error:
+          err instanceof Error
+            ? err.message
+            : "Errore durante l’attivazione del Prestigio.",
+      });
     }
   },
 );
@@ -1177,6 +1207,7 @@ app.get(
           title: r.title,
           prestige: r.prestige,
           bountyStreak: r.bountyStreak,
+          isSuperuser: r.isSuperuser,
           unlockedCount: r.unlockedCount,
           percent: Math.round((r.unlockedCount / MARSALA_POIS.length) * 100),
           easterEggCount: r.easterEggs.length,

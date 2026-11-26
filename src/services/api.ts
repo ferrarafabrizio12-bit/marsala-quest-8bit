@@ -1,6 +1,10 @@
 import type {
   AvatarConfig,
   AvatarGender,
+  BeardStyleId,
+  HairColorId,
+  HairStyleId,
+  SkinToneId,
   SuperuserOverrides,
 } from "../../shared/cosmetics";
 import type {
@@ -49,6 +53,10 @@ export const api = {
     nickname: string;
     password: string;
     gender: AvatarGender;
+    skinTone: SkinToneId;
+    hairColor: HairColorId;
+    hairStyle: HairStyleId;
+    beard: BeardStyleId;
   }) =>
     request<{ token: string; user: UserProfile }>("/auth/register", {
       method: "POST",

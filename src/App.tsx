@@ -9,8 +9,10 @@ import {
 import {
   type AvatarConfig,
   COSMETICS_CATALOG,
+  MAX_PRESTIGE,
   type SuperuserOverrides,
   getTitleById,
+  hasCompletedMaxPrestige,
 } from "../shared/cosmetics";
 import { api, getStoredToken, setStoredToken } from "./services/api";
 import { useRealGps } from "./hooks/useRealGps";
@@ -363,6 +365,10 @@ export default function App() {
   };
 
   const handleConfirmPrestige = async () => {
+    if (!user || user.prestige >= MAX_PRESTIGE) {
+      setShowPrestigeConfirm(false);
+      return;
+    }
     setActivatingPrestige(true);
     try {
       const res = await api.activatePrestige();
@@ -382,7 +388,9 @@ export default function App() {
       setShowPrestigeConfirm(false);
       sound8bit.victoryMedal();
       showToast(
-        `⚡ PRESTIGIO ★${res.user.prestige} ATTIVATO! Card Olografiche & nuovi capi in LOOK!`,
+        res.user.prestige >= MAX_PRESTIGE
+          ? `⚜️ PRESTIGIO FINALE ★${MAX_PRESTIGE}/${MAX_PRESTIGE} ATTIVATO! Completa 20/20 per le ricompense Immortale!`
+          : `⚡ PRESTIGIO ★${res.user.prestige}/${MAX_PRESTIGE} ATTIVATO! Card Olografiche & nuovi capi in LOOK!`,
       );
     } catch (err) {
       showToast(
@@ -408,6 +416,10 @@ export default function App() {
 
     const nextUnlocks = { ...unlocks, [selectedPoi.id]: res.unlock };
     const nextCount = Object.keys(nextUnlocks).length;
+    const justHitMaxPrestige =
+      prevCount < MARSALA_POIS.length &&
+      hasCompletedMaxPrestige(res.user.prestige, nextCount);
+
     setUser(res.user);
     setUnlocks(nextUnlocks);
     setEasterEggs(res.easterEggs);
@@ -437,7 +449,11 @@ export default function App() {
           )
         : undefined;
 
-    if (res.bountyClaimedNow) {
+    if (justHitMaxPrestige) {
+      showToast(
+        `⚜️ PRESTIGIO ★${MAX_PRESTIGE} COMPLETATO! Sbloccati: Immortale di Lilibeo ★5, Manto Imperiale ★5 e Medaglia ★5!`,
+      );
+    } else if (res.bountyClaimedNow) {
       showToast(
         `🎯 OBIETTIVO DEL GIORNO COMPLETATO (+${res.bountyXpAwarded} XP • Streak 🔥${res.user.bountyStreak}d)!`,
       );
@@ -525,7 +541,18 @@ export default function App() {
     setDailyBounty(res.dailyBounty);
     setTotalXp(res.totalXp);
     sound8bit.victoryMedal();
-    showToast("⚡ Tutti i 20 luoghi di Marsala sbloccati!");
+    if (
+      hasCompletedMaxPrestige(
+        res.user.prestige,
+        Object.keys(res.unlocks).length,
+      )
+    ) {
+      showToast(
+        `⚜️ 20/20 AL PRESTIGIO ★${MAX_PRESTIGE}! Sbloccati Manto Imperiale ★5, titolo e Medaglia ★5!`,
+      );
+    } else {
+      showToast("⚡ Tutti i 20 luoghi di Marsala sbloccati!");
+    }
   };
 
   const handleLockAllPois = async () => {
@@ -624,6 +651,8 @@ export default function App() {
           ? "theme-night"
           : "";
 
+  const nextPrestigeLevel = Math.min(user.prestige + 1, MAX_PRESTIGE);
+
   return (
     <main
       className={`relative w-screen h-[100dvh] overflow-hidden ${themeClass}`}
@@ -678,6 +707,7 @@ export default function App() {
         }
         unlockedCount={unlockedCount}
         prestige={user.prestige}
+        isSuperuser={Boolean(user.isSuperuser)}
         isCompleted={isCompleted}
         crtEnabled={crtEnabled}
         muted={muted}
@@ -757,12 +787,12 @@ export default function App() {
         </div>
       )}
 
-      {showPrestigeConfirm && (
+      {showPrestigeConfirm && user.prestige < MAX_PRESTIGE && (
         <div className="fixed inset-0 z-[1150] bg-black/85 flex items-center justify-center p-4">
           <div className="nes-box-gold holo-card max-w-md p-5 text-center">
             <p className="text-5xl mb-2">⚡</p>
             <h3 className="font-pixel text-xs text-[#f0abfc] mb-3">
-              NEW GAME+ • PRESTIGIO ★{user.prestige + 1}
+              NEW GAME+ • PRESTIGIO ★{nextPrestigeLevel}/{MAX_PRESTIGE}
             </h3>
             <p className="text-xl text-[#f4f1de] mb-4 leading-snug">
               Hai illuminato tutta Marsala! Attivando il Prestigio:
@@ -771,6 +801,15 @@ export default function App() {
               <br />• La mappa torna grigia per una nuova sfida con{" "}
               <strong>raggio GPS stretto</strong>, <strong>+25% XP</strong> e{" "}
               <strong>Card Olografiche ✦</strong>!
+              {nextPrestigeLevel === MAX_PRESTIGE && (
+                <>
+                  <br />• Completando il{" "}
+                  <strong>20/20 al Prestigio ★{MAX_PRESTIGE}</strong> sblocchi
+                  il titolo unico <strong>Immortale di Lilibeo ★5</strong>, il{" "}
+                  <strong>Manto Imperiale ★5</strong> e la{" "}
+                  <strong>Medaglia ★5 MAX</strong>!
+                </>
+              )}
             </p>
             <div className="grid grid-cols-2 gap-2.5">
               <button
@@ -787,7 +826,9 @@ export default function App() {
                 onClick={() => void handleConfirmPrestige()}
                 className="nes-btn py-2.5 bg-[#c026d3] text-white text-[9px]"
               >
-                {activatingPrestige ? "ATTIVAZIONE..." : "★ AVVIA PRESTIGIO"}
+                {activatingPrestige
+                  ? "ATTIVAZIONE..."
+                  : `★ AVVIA ★P${nextPrestigeLevel}`}
               </button>
             </div>
           </div>
@@ -886,6 +927,8 @@ export default function App() {
           totalXp={totalXp}
           easterEggCount={easterEggs.length}
           prestige={user.prestige}
+          unlockedCount={unlockedCount}
+          isSuperuser={Boolean(user.isSuperuser)}
           avatar={user.avatar}
           titleId={user.title}
           onClose={() => setShowMedal(false)}

@@ -5,6 +5,7 @@ import {
   DEFAULT_AVATAR,
   DEFAULT_SUPERUSER_OVERRIDES,
   DEFAULT_TITLE_ID,
+  MAX_PRESTIGE,
   type SuperuserOverrides,
   sanitizeAvatarConfig,
   sanitizeSuperuserOverrides,
@@ -50,6 +51,7 @@ export interface LeaderboardRow {
   prestige: number;
   bonusXp: number;
   bountyStreak: number;
+  isSuperuser: boolean;
   unlockedCount: number;
   poiXp: number;
   easterEggs: string[];
@@ -119,7 +121,7 @@ function mapUserRow(r: Record<string, unknown>): UserRecord {
     passwordHash: String(r.password_hash),
     avatar: sanitizeAvatarConfig(r.avatar_config),
     title: sanitizeTitleId(r.equipped_title),
-    prestige: Number(r.prestige || 0),
+    prestige: Math.min(MAX_PRESTIGE, Math.max(0, Number(r.prestige || 0))),
     bonusXp: Number(r.bonus_xp || 0),
     bountyStreak: Number(r.bounty_streak || 0),
     lastBountyDate: r.last_bounty_date ? String(r.last_bounty_date) : null,
@@ -490,6 +492,17 @@ export async function activateUserPrestige(
   try {
     await client.query("BEGIN");
 
+    const curRes = await client.query(
+      `SELECT prestige FROM users WHERE id = $1 FOR UPDATE`,
+      [userId],
+    );
+    const currentPrestige = Number(curRes.rows[0]?.prestige || 0);
+    if (currentPrestige >= MAX_PRESTIGE) {
+      throw new Error(
+        `Hai già raggiunto il livello massimo di Prestigio (★P${MAX_PRESTIGE})!`,
+      );
+    }
+
     const sumRes = await client.query(
       `SELECT COALESCE(SUM(xp_earned), 0)::int AS current_poi_xp
        FROM unlocks WHERE user_id = $1`,
@@ -501,11 +514,11 @@ export async function activateUserPrestige(
 
     const userRes = await client.query(
       `UPDATE users
-       SET prestige = prestige + 1,
+       SET prestige = LEAST(prestige + 1, $3),
            bonus_xp = bonus_xp + $1
        WHERE id = $2
        RETURNING ${USER_COLUMNS}`,
-      [bankedXp, userId],
+      [bankedXp, userId, MAX_PRESTIGE],
     );
 
     await client.query("COMMIT");
@@ -614,12 +627,12 @@ export async function deleteFeedback(feedbackId: string): Promise<void> {
 export async function getLeaderboardRows(): Promise<LeaderboardRow[]> {
   const [usersRes, eggsRes] = await Promise.all([
     pool.query(`
-      SELECT u.id AS user_id, u.nickname, u.avatar_config, u.equipped_title, u.prestige, u.bonus_xp, u.bounty_streak,
+      SELECT u.id AS user_id, u.nickname, u.avatar_config, u.equipped_title, u.prestige, u.bonus_xp, u.bounty_streak, u.is_superuser,
         COUNT(un.poi_id)::int AS unlocked_count,
         COALESCE(SUM(un.xp_earned), 0)::int AS poi_xp
       FROM users u
       LEFT JOIN unlocks un ON un.user_id = u.id
-      GROUP BY u.id, u.nickname, u.avatar_config, u.equipped_title, u.prestige, u.bonus_xp, u.bounty_streak
+      GROUP BY u.id, u.nickname, u.avatar_config, u.equipped_title, u.prestige, u.bonus_xp, u.bounty_streak, u.is_superuser
     `),
     pool.query(`SELECT user_id, egg_id FROM easter_eggs`),
   ]);
@@ -636,9 +649,10 @@ export async function getLeaderboardRows(): Promise<LeaderboardRow[]> {
     nickname: r.nickname,
     avatar: sanitizeAvatarConfig(r.avatar_config),
     title: sanitizeTitleId(r.equipped_title),
-    prestige: Number(r.prestige || 0),
+    prestige: Math.min(MAX_PRESTIGE, Math.max(0, Number(r.prestige || 0))),
     bonusXp: Number(r.bonus_xp || 0),
     bountyStreak: Number(r.bounty_streak || 0),
+    isSuperuser: Boolean(r.is_superuser),
     unlockedCount: Number(r.unlocked_count),
     poiXp: Number(r.poi_xp),
     easterEggs: eggsByUser.get(r.user_id) || [],

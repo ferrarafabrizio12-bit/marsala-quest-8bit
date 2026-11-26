@@ -40,6 +40,7 @@ export interface LeaderboardEntry {
   title: string;
   prestige: number;
   bountyStreak: number;
+  isSuperuser: boolean;
   unlockedCount: number;
   percent: number;
   easterEggCount: number;
