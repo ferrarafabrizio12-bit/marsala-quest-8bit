@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { APP_VERSION } from "../../shared/version";
 import { api } from "../services/api";
 import type { FeedbackCategory, FeedbackItem } from "../types/game";
 import { sound8bit } from "../utils/sound8bit";
@@ -65,7 +66,6 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
   const remainingMs = cooldownEndMs ? Math.max(0, cooldownEndMs - nowMs) : 0;
   const isOnCooldown = !isSuperuser && remainingMs > 0;
 
-  // Controlla lo stato del cooldown 12h all'apertura
   useEffect(() => {
     if (isSuperuser) {
       setLoadingCooldown(false);
@@ -96,7 +96,6 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
     };
   }, [isSuperuser]);
 
-  // Aggiorna il timer ogni secondo mentre il cooldown è attivo
   useEffect(() => {
     if (!cooldownEndMs || cooldownEndMs <= Date.now()) return;
     const id = window.setInterval(() => {
@@ -257,7 +256,7 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
           </button>
         </div>
 
-        {/* TAB 1: INVIO FEEDBACK (privato verso l'autore + timer 12h) */}
+        {/* TAB 1: INVIO FEEDBACK (privato verso l'autore + timer 12h + versione app in basso) */}
         {tab === "feedback" && (
           <form
             onSubmit={(e) => void handleSubmitFeedback(e)}
@@ -367,6 +366,16 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
                     ? `⏳ DISPONIBILE TRA ${formatCountdown(remainingMs)}`
                     : "📨 INVIA FEEDBACK"}
             </button>
+
+            {/* Riferimento Versione App (SemVer) in basso nella sezione Feedback */}
+            <div className="pt-2.5 mt-1 border-t-2 border-[#2e3d6b] flex items-center justify-between gap-2 text-slate-400">
+              <span className="font-pixel text-[7px] text-[#94a3b8]">
+                MARSALA QUEST 8-BIT
+              </span>
+              <span className="font-pixel text-[8px] text-[#4cc9f0] bg-[#090d18] border border-[#2e3d6b] px-2 py-1">
+                v{APP_VERSION}
+              </span>
+            </div>
           </form>
         )}
 
@@ -401,6 +410,19 @@ export const InfoFeedbackModal: React.FC<InfoFeedbackModalProps> = ({
                 Stagnone in un’avventura interattiva e coinvolgente, pensata
                 tanto per i turisti alla scoperta della città quanto per i
                 marsalesi che vogliono riscoprirla con occhi nuovi.
+              </p>
+            </div>
+
+            {/* Nota Privacy & GPS */}
+            <div className="bg-[#090d18] border-2 border-[#2e3d6b] p-2.5 text-left">
+              <p className="font-pixel text-[7px] text-[#4cc9f0] mb-1">
+                🔒 PRIVACY &amp; GPS
+              </p>
+              <p className="text-base text-[#94a3b8] leading-tight">
+                La posizione GPS viene usata solo mentre l’app è aperta per la
+                bussola e per verificare lo sblocco dei monumenti: nessun
+                tracciamento in background. Le foto scattate restano visibili
+                esclusivamente nella tua Marsala-Dex.
               </p>
             </div>
 

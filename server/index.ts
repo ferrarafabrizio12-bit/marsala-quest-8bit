@@ -1,6 +1,8 @@
 import "dotenv/config";
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
@@ -56,13 +58,19 @@ import {
   sanitizeSuperuserOverrides,
   sanitizeTitleId,
 } from "../shared/cosmetics.js";
+import { APP_VERSION } from "../shared/version.js";
 
 const app = express();
 app.set("trust proxy", 1);
+app.disable("x-powered-by");
 
 const PORT = Number(process.env.PORT) || 3001;
 const IS_PROD = process.env.NODE_ENV === "production";
 const FEEDBACK_COOLDOWN_MS = 12 * 60 * 60 * 1000;
+const MAX_PHOTO_DATA_URL_LENGTH = 1_800_000;
+const SAFE_RASTER_DATA_URL_REGEX =
+  /^data:image\/(?:jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+const USERNAME_REGEX = /^[a-z0-9._-]+$/;
 
 const JWT_SECRET =
   process.env.JWT_SECRET ||
@@ -70,6 +78,11 @@ const JWT_SECRET =
 
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET è obbligatoria in produzione.");
+}
+if (IS_PROD && JWT_SECRET.length < 32) {
+  console.warn(
+    "[SECURITY WARN] JWT_SECRET è corta: usa una chiave casuale di almeno 32 caratteri.",
+  );
 }
 
 const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:5173")
@@ -82,6 +95,13 @@ const isLocalNetworkOrigin = (origin: string): boolean =>
     origin,
   );
 
+// Header di sicurezza HTTP (consente cross-origin solo per le risorse del tile proxy)
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
+
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -89,18 +109,58 @@ app.use(
       const normalized = origin.replace(/\/+$/, "");
       const isAllowed = allowedOrigins.includes(normalized);
       const isLocal = !IS_PROD && isLocalNetworkOrigin(normalized);
-      const isVercel = normalized.endsWith(".vercel.app");
 
-      if (isAllowed || isLocal || isVercel) {
+      if (isAllowed || isLocal) {
         return callback(null, true);
       }
-      return callback(new Error(`Origine non consentita da CORS: ${origin}`));
+      return callback(new Error("Origine non consentita da CORS."));
     },
     credentials: true,
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
-app.use(express.json({ limit: "8mb" }));
+// Limite payload JSON ridotto per prevenire saturazione RAM/DB
+app.use(express.json({ limit: "2mb" }));
+
+// --- RATE LIMITERS ANTI BRUTE-FORCE & ANTI SPAM ---
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Troppi tentativi di accesso. Riprova tra 15 minuti." },
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: {
+    error: "Troppe registrazioni da questo dispositivo. Riprova tra un’ora.",
+  },
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skip: (req) => req.path.startsWith("/map-tile/") || req.path === "/health",
+  message: { error: "Troppe richieste ravvicinate. Attendi qualche secondo." },
+});
+
+const tileLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 180,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Troppe richieste mappa. Riprova tra un minuto." },
+});
+
+app.use("/api", apiLimiter);
 
 interface AuthRequest extends Request {
   userId?: string;
@@ -126,6 +186,22 @@ function authMiddleware(
       .status(401)
       .json({ error: "Sessione scaduta. Effettua di nuovo il login." });
   }
+}
+
+function sanitizeNickname(raw: unknown): string {
+  return String(raw || "")
+    .replace(/[\u0000-\u001F\u007F<>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isValidClientPhotoDataUrl(raw: unknown): raw is string {
+  return (
+    typeof raw === "string" &&
+    raw.length > 0 &&
+    raw.length <= MAX_PHOTO_DATA_URL_LENGTH &&
+    SAFE_RASTER_DATA_URL_REGEX.test(raw)
+  );
 }
 
 function computeEggXp(easterEggs: string[]): number {
@@ -282,186 +358,213 @@ function setTileHeaders(res: Response, contentType: string): void {
   res.setHeader("Cache-Control", "public, max-age=3600");
 }
 
-app.get("/api/map-tile/:z/:x/:yPng", async (req: Request, res: Response) => {
-  const z = Number(req.params.z);
-  const x = Number(req.params.x);
-  const y = Number(String(req.params.yPng || "").replace(/\.png$/i, ""));
+app.get(
+  "/api/map-tile/:z/:x/:yPng",
+  tileLimiter,
+  async (req: Request, res: Response) => {
+    const z = Number(req.params.z);
+    const x = Number(req.params.x);
+    const y = Number(String(req.params.yPng || "").replace(/\.png$/i, ""));
 
-  if (!isValidMarsalaTile(z, x, y)) {
-    res.status(400).json({ error: "Coordinate tassello fuori area Marsala." });
-    return;
-  }
-
-  const key = `osm-v4:${z}/${x}/${y}`;
-  const cached = tileCache.get(key);
-  if (cached) {
-    setTileHeaders(res, cached.contentType);
-    res.send(cached.buf);
-    return;
-  }
-
-  const sources = [
-    `https://tile.openstreetmap.de/${z}/${x}/${y}.png`,
-    `https://a.tile.openstreetmap.fr/osmfr/${z}/${x}/${y}.png`,
-    `https://b.tile.openstreetmap.fr/osmfr/${z}/${x}/${y}.png`,
-    `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
-    `https://tile.opentopomap.org/${z}/${x}/${y}.png`,
-  ];
-
-  for (const url of sources) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 7000);
-      const upstream = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          "User-Agent":
-            "MarsalaQuest8Bit/1.0 (https://marsala-quest-8bit.vercel.app)",
-          Accept: "image/png,image/jpeg,image/*;q=0.9",
-        },
-      });
-      clearTimeout(timer);
-
-      if (!upstream.ok) continue;
-      const contentType = upstream.headers.get("content-type") || "image/png";
-      if (!contentType.startsWith("image/")) continue;
-
-      const arrBuf = await upstream.arrayBuffer();
-      const buf = Buffer.from(arrBuf);
-      if (!isValidImageBuffer(buf)) continue;
-
-      if (tileCache.size >= 500) {
-        const firstKey = tileCache.keys().next().value;
-        if (firstKey) tileCache.delete(firstKey);
-      }
-      tileCache.set(key, { buf, contentType });
-
-      setTileHeaders(res, contentType);
-      res.send(buf);
+    if (!isValidMarsalaTile(z, x, y)) {
+      res
+        .status(400)
+        .json({ error: "Coordinate tassello fuori area Marsala." });
       return;
-    } catch {
-      // Prova il server OSM successivo
     }
-  }
 
-  res.status(502).json({ error: "Tassello mappa non disponibile." });
-});
+    const key = `osm-v4:${z}/${x}/${y}`;
+    const cached = tileCache.get(key);
+    if (cached) {
+      setTileHeaders(res, cached.contentType);
+      res.send(cached.buf);
+      return;
+    }
+
+    const sources = [
+      `https://tile.openstreetmap.de/${z}/${x}/${y}.png`,
+      `https://a.tile.openstreetmap.fr/osmfr/${z}/${x}/${y}.png`,
+      `https://b.tile.openstreetmap.fr/osmfr/${z}/${x}/${y}.png`,
+      `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
+      `https://tile.opentopomap.org/${z}/${x}/${y}.png`,
+    ];
+
+    for (const url of sources) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 7000);
+        const upstream = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            "User-Agent":
+              "MarsalaQuest8Bit/1.0 (https://marsala-quest-8bit.vercel.app)",
+            Accept: "image/png,image/jpeg,image/*;q=0.9",
+          },
+        });
+        clearTimeout(timer);
+
+        if (!upstream.ok) continue;
+        const contentType = upstream.headers.get("content-type") || "image/png";
+        if (!contentType.startsWith("image/")) continue;
+
+        const arrBuf = await upstream.arrayBuffer();
+        const buf = Buffer.from(arrBuf);
+        if (!isValidImageBuffer(buf)) continue;
+
+        if (tileCache.size >= 500) {
+          const firstKey = tileCache.keys().next().value;
+          if (firstKey) tileCache.delete(firstKey);
+        }
+        tileCache.set(key, { buf, contentType });
+
+        setTileHeaders(res, contentType);
+        res.send(buf);
+        return;
+      } catch {
+        // Prova il server OSM successivo
+      }
+    }
+
+    res.status(502).json({ error: "Tassello mappa non disponibile." });
+  },
+);
 
 app.get("/api/health", (_req: Request, res: Response) => {
-  res.json({ status: "ok", service: "marsala-quest-8bit-api" });
+  res.json({
+    status: "ok",
+    service: "marsala-quest-8bit-api",
+    version: APP_VERSION,
+  });
 });
 
-app.post("/api/auth/register", async (req: Request, res: Response) => {
-  try {
-    const {
-      username,
-      nickname,
-      password,
-      gender,
-      skinTone,
-      hairColor,
-      hairStyle,
-      beard,
-    } = req.body as {
-      username?: string;
-      nickname?: string;
-      password?: string;
-      gender?: string;
-      skinTone?: string;
-      hairColor?: string;
-      hairStyle?: string;
-      beard?: string;
-    };
+app.post(
+  "/api/auth/register",
+  registerLimiter,
+  async (req: Request, res: Response) => {
+    try {
+      const {
+        username,
+        nickname,
+        password,
+        gender,
+        skinTone,
+        hairColor,
+        hairStyle,
+        beard,
+      } = req.body as {
+        username?: string;
+        nickname?: string;
+        password?: string;
+        gender?: string;
+        skinTone?: string;
+        hairColor?: string;
+        hairStyle?: string;
+        beard?: string;
+      };
 
-    const cleanUser = (username || "").trim().toLowerCase();
-    const cleanNick = (nickname || "").trim();
+      const cleanUser = (username || "").trim().toLowerCase();
+      const cleanNick = sanitizeNickname(nickname);
 
-    if (cleanUser.length < 3 || cleanUser.length > 30) {
-      res.status(400).json({ error: "Username tra 3 e 30 caratteri." });
-      return;
-    }
-    if (cleanNick.length < 2 || cleanNick.length > 20) {
-      res.status(400).json({ error: "Nickname tra 2 e 20 caratteri." });
-      return;
-    }
-    if (!password || password.length < 6) {
-      res.status(400).json({ error: "Password minimo 6 caratteri." });
-      return;
-    }
+      if (
+        cleanUser.length < 3 ||
+        cleanUser.length > 30 ||
+        !USERNAME_REGEX.test(cleanUser)
+      ) {
+        res.status(400).json({
+          error:
+            "Username tra 3 e 30 caratteri (solo lettere, numeri, punti, _ o -).",
+        });
+        return;
+      }
+      if (cleanNick.length < 2 || cleanNick.length > 20) {
+        res.status(400).json({ error: "Nickname tra 2 e 20 caratteri." });
+        return;
+      }
+      if (!password || password.length < 6 || password.length > 100) {
+        res.status(400).json({ error: "Password tra 6 e 100 caratteri." });
+        return;
+      }
 
-    if (await findUserByUsername(cleanUser)) {
-      res.status(409).json({ error: "Username già registrato." });
-      return;
-    }
-    if (await isNicknameTaken(cleanNick)) {
+      if (await findUserByUsername(cleanUser)) {
+        res.status(409).json({ error: "Username già registrato." });
+        return;
+      }
+      if (await isNicknameTaken(cleanNick)) {
+        res
+          .status(409)
+          .json({ error: "Nickname già scelto da un altro player." });
+        return;
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      const initialAvatar = sanitizeAvatarConfig({
+        ...DEFAULT_AVATAR,
+        gender,
+        skinTone,
+        hairColor,
+        hairStyle,
+        beard,
+        hat: "hat-none",
+      });
+
+      const user = await createUser({
+        id: crypto.randomUUID(),
+        username: cleanUser,
+        nickname: cleanNick,
+        passwordHash,
+        avatar: initialAvatar,
+      });
+
+      const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
+        expiresIn: "30d",
+      });
+      res.status(201).json({
+        token,
+        user: serializeUser(user),
+      });
+    } catch (err) {
+      console.error("[REGISTER ERROR]", err);
       res
-        .status(409)
-        .json({ error: "Nickname già scelto da un altro player." });
-      return;
+        .status(500)
+        .json({ error: "Errore interno durante la registrazione." });
     }
+  },
+);
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const initialAvatar = sanitizeAvatarConfig({
-      ...DEFAULT_AVATAR,
-      gender,
-      skinTone,
-      hairColor,
-      hairStyle,
-      beard,
-      hat: "hat-none",
-    });
+app.post(
+  "/api/auth/login",
+  loginLimiter,
+  async (req: Request, res: Response) => {
+    try {
+      const { username, password } = req.body as {
+        username?: string;
+        password?: string;
+      };
+      const cleanUser = (username || "").trim().toLowerCase();
 
-    const user = await createUser({
-      id: crypto.randomUUID(),
-      username: cleanUser,
-      nickname: cleanNick,
-      passwordHash,
-      avatar: initialAvatar,
-    });
+      const user = await findUserByUsername(cleanUser);
+      if (
+        !user ||
+        !password ||
+        !(await bcrypt.compare(password, user.passwordHash))
+      ) {
+        res.status(401).json({ error: "Username o password non validi." });
+        return;
+      }
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
-      expiresIn: "30d",
-    });
-    res.status(201).json({
-      token,
-      user: serializeUser(user),
-    });
-  } catch (err) {
-    console.error("[REGISTER ERROR]", err);
-    res.status(500).json({ error: "Errore interno durante la registrazione." });
-  }
-});
-
-app.post("/api/auth/login", async (req: Request, res: Response) => {
-  try {
-    const { username, password } = req.body as {
-      username?: string;
-      password?: string;
-    };
-    const cleanUser = (username || "").trim().toLowerCase();
-
-    const user = await findUserByUsername(cleanUser);
-    if (
-      !user ||
-      !password ||
-      !(await bcrypt.compare(password, user.passwordHash))
-    ) {
-      res.status(401).json({ error: "Username o password non validi." });
-      return;
+      const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
+        expiresIn: "30d",
+      });
+      res.json({
+        token,
+        user: serializeUser(user),
+      });
+    } catch (err) {
+      console.error("[LOGIN ERROR]", err);
+      res.status(500).json({ error: "Errore interno durante il login." });
     }
-
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
-      expiresIn: "30d",
-    });
-    res.json({
-      token,
-      user: serializeUser(user),
-    });
-  } catch (err) {
-    console.error("[LOGIN ERROR]", err);
-    res.status(500).json({ error: "Errore interno durante il login." });
-  }
-});
+  },
+);
 
 app.patch(
   "/api/auth/onboarding-complete",
@@ -510,9 +613,9 @@ app.patch(
   authMiddleware,
   async (req: AuthRequest, res: Response) => {
     try {
-      const cleanNick = (
-        (req.body as { nickname?: string }).nickname || ""
-      ).trim();
+      const cleanNick = sanitizeNickname(
+        (req.body as { nickname?: string }).nickname,
+      );
       if (cleanNick.length < 2 || cleanNick.length > 20) {
         res.status(400).json({ error: "Nickname tra 2 e 20 caratteri." });
         return;
@@ -749,15 +852,23 @@ app.post(
         return;
       }
 
+      const hasValidPhoto = isValidClientPhotoDataUrl(photoDataUrl);
+
       if (!user.isSuperuser) {
-        if (typeof lat !== "number" || typeof lng !== "number") {
+        if (
+          typeof lat !== "number" ||
+          typeof lng !== "number" ||
+          !Number.isFinite(lat) ||
+          !Number.isFinite(lng)
+        ) {
           res.status(400).json({ error: "Coordinate GPS reali obbligatorie." });
           return;
         }
-        if (!photoDataUrl || !photoDataUrl.startsWith("data:image/")) {
-          res
-            .status(400)
-            .json({ error: "Foto obbligatoria per sbloccare la Card." });
+        if (!hasValidPhoto) {
+          res.status(400).json({
+            error:
+              "Foto JPEG/PNG/WebP valida obbligatoria (dimensione max ~1.3 MB).",
+          });
           return;
         }
 
@@ -774,12 +885,13 @@ app.post(
         }
       }
 
-      const effectiveLat = typeof lat === "number" ? lat : poi.lat;
-      const effectiveLng = typeof lng === "number" ? lng : poi.lng;
-      const effectivePhoto =
-        photoDataUrl && photoDataUrl.startsWith("data:image/")
-          ? photoDataUrl
-          : buildSvgFallbackCard(poi, user.nickname, user.prestige > 0);
+      const effectiveLat =
+        typeof lat === "number" && Number.isFinite(lat) ? lat : poi.lat;
+      const effectiveLng =
+        typeof lng === "number" && Number.isFinite(lng) ? lng : poi.lng;
+      const effectivePhoto = hasValidPhoto
+        ? photoDataUrl
+        : buildSvgFallbackCard(poi, user.nickname, user.prestige > 0);
 
       const existingUnlocks = await getUserUnlocks(user.id);
       const prevUnlock = existingUnlocks[poi.id];
@@ -1091,7 +1203,9 @@ app.post(
         category?: string;
         message?: string;
       };
-      const cleanMsg = (message || "").trim();
+      const cleanMsg = (message || "")
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+        .trim();
       if (cleanMsg.length < 5) {
         res
           .status(400)
@@ -1229,7 +1343,30 @@ app.get(
   },
 );
 
-console.log("[MARSALA QUEST 8-BIT API] Connessione a PostgreSQL in corso...");
+// Gestore globale errori (CORS, payload troppo grandi o JSON malformati senza esporre stack trace)
+app.use(
+  (
+    err: Error & { type?: string },
+    _req: Request,
+    res: Response,
+    _next: NextFunction,
+  ) => {
+    if (err.type === "entity.too.large") {
+      res.status(413).json({ error: "Contenuto troppo grande (max 2 MB)." });
+      return;
+    }
+    if (err.message?.includes("CORS")) {
+      res.status(403).json({ error: "Origine non autorizzata." });
+      return;
+    }
+    console.error("[UNHANDLED ERROR]", err.message);
+    res.status(400).json({ error: "Richiesta non valida." });
+  },
+);
+
+console.log(
+  `[MARSALA QUEST 8-BIT API v${APP_VERSION}] Connessione a PostgreSQL in corso...`,
+);
 
 initDb()
   .then(async () => {
@@ -1254,7 +1391,7 @@ initDb()
 
     app.listen(PORT, () => {
       console.log(
-        `[MARSALA QUEST 8-BIT API] Attiva su porta ${PORT} (PostgreSQL OK)`,
+        `[MARSALA QUEST 8-BIT API v${APP_VERSION}] Attiva su porta ${PORT} (PostgreSQL OK)`,
       );
     });
   })
